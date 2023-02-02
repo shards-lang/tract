@@ -915,3 +915,19 @@ fn depthwise_0() -> anyhow::Result<()> {
     assert_eq!(pb.tract().unwrap(), pb.reference());
     Ok(())
 }
+
+#[test]
+fn crasher_monterey() -> anyhow::Result<()> {
+    let pb = ConvProblem {
+        shape_in: DataFormat::HWC.from_n_c_hw(1, 1, [1])?,
+        kernel_format: KernelFormat::OIHW,
+        group: 1,
+        data: arr2(&[[0.0f32]]).into_dyn(),
+        kernel: arr3(&[[[0.0f32]], [[0.0f32]]]).into_dyn(),
+        bias: None,
+        pad: PaddingSpec::Valid,
+        strides: tvec!(1),
+    };
+    assert_eq!(pb.tract().unwrap(), pb.reference());
+    Ok(())
+}
