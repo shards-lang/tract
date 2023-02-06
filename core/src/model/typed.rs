@@ -1,7 +1,6 @@
 use crate::internal::*;
 use crate::model::*;
 use crate::ops;
-use crate::ops::invariants;
 use crate::optim::OptimizerSession;
 use crate::plan::{SimplePlan, SimpleState, FrozenSimpleState};
 
@@ -181,10 +180,6 @@ impl TypedModel {
     /// Translate the graph to locally optimized operators (LIR or MIR ops).
     pub fn optimize(&mut self) -> TractResult<()> {
         crate::optim::Optimizer::codegen().optimize(self)
-    }
-
-    pub fn invariants(&self) -> TractResult<invariants::Invariants> {
-        invariants::for_model(self)
     }
 }
 

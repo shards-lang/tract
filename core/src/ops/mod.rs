@@ -7,68 +7,19 @@ use dyn_clone;
 
 #[macro_use]
 pub mod macros;
-/*
-#[macro_use]
-pub mod element_wise;
-#[macro_use]
-pub mod binary;
-*/
-
-pub mod invariants;
 
 pub mod array;
-// pub mod cast;
-// pub mod change_axes;
 pub mod cnn;
-// pub mod downsample;
 pub mod dummy;
-// pub mod fft;
 pub mod identity;
 pub mod konst;
-//pub mod logic;
-//pub mod math;
 pub mod matmul;
 pub mod nn;
-//pub mod quant;
-// pub mod scan;
 pub mod source;
 pub mod unimpl;
 
-//pub use downsample::Downsample;
-pub use invariants::*;
-
 use crate::internal::*;
 use crate::optim::OptimizerSession;
-
-/// Level of precision to be expected in implementations comparisons.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Validation {
-    /// Output is random
-    Random,
-    /// Implementation may induce rounding errors
-    Rounding,
-    /// Implementation must be accurate
-    Accurate,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum Cost {
-    Div(DatumType),
-    FMA(DatumType),
-    Buffer(DatumType),
-    Params(DatumType),
-}
-
-impl Cost {
-    pub fn is_compute(&self) -> bool {
-        use Cost::*;
-        match self {
-            FMA(_) | Div(_) => true,
-            Buffer(_) | Params(_) => false,
-        }
-    }
-}
-
 
 pub trait FrozenOpState: fmt::Debug + dyn_clone::DynClone + Send + 'static {
     fn unfreeze(&self) -> Box<dyn OpState>;
@@ -114,22 +65,10 @@ pub trait Op:
 {
     fn name(&self) -> Cow<str>;
 
-    /// The kind of accuracy check that should be performed on operation when
-    /// testing them.
-    fn validation(&self) -> Validation {
-        Validation::Accurate
-    }
-
     /// Compare two ops.
     // Should this one be and Eq or PartialEq impl instead ?
     fn same_as(&self, _other: &dyn Op) -> bool {
         false
-    }
-
-    /// Short (one-line) strings giving hints on internal implementation or
-    /// important configuration details to be displayed in dumps.
-    fn info(&self) -> TractResult<Vec<String>> {
-        Ok(vec![])
     }
 
     fn as_typed(&self) -> Option<&dyn TypedOp>;
@@ -146,16 +85,6 @@ pub trait TypedOp:
 
     /// Deduce output facts from input facts.
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>>;
-
-    #[allow(unused_variables)]
-    fn invariants(&self, inputs: &[&TypedFact], outputs: &[&TypedFact]) -> TractResult<Invariants> {
-        Ok(Invariants::default())
-    }
-
-    /// Fuse op after codegen to deal with local optimisations.
-    fn fuse(&self, _model: &TypedModel, _node: &TypedNode) -> TractResult<Option<TypedModelPatch>> {
-        Ok(None)
-    }
 
     /// Declutter the op to the tract_core operator set as much as possible.
     #[allow(unused_variables)]
@@ -177,31 +106,6 @@ pub trait TypedOp:
     ) -> TractResult<Option<TypedModelPatch>> {
         Ok(None)
     }
-
-    /// Computes a cost hint of the operation.
-    ///
-    /// Each pair is a type of operation and a number per call on eval.
-    fn cost(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<(Cost, TDim)>> {
-        Ok(tvec!())
-    }
-
-/*
-    #[allow(unused_variables)]
-    fn suggested_axis_changes(&self) -> TractResult<TVec<(InOut, AxisOp)>> {
-        Ok(tvec!())
-    }
-
-    #[allow(unused_variables)]
-    fn change_axes(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-        io: InOut,
-        change: &AxisOp,
-    ) -> TractResult<Option<AxisChangeConsequence>> {
-        Ok(None)
-    }
-*/
 
     #[allow(unused_variables)]
     #[allow(clippy::too_many_arguments)]

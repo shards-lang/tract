@@ -18,10 +18,6 @@ impl Op for MatMulUnary {
         "MatMulUnary".into()
     }
 
-    fn info(&self) -> TractResult<Vec<String>> {
-        Ok(vec![format!("{:?}", self.axes), format!("A: {:?}", self.a)])
-    }
-
     op_as_typed_op!();
 }
 
@@ -51,81 +47,6 @@ impl TypedOp for MatMulUnary {
         )?;
         let c_dt = output_type(inputs[0].datum_type);
         Ok(tvec!(c_dt.fact(c_shape)))
-    }
-
-    fn invariants(&self, inputs: &[&TypedFact], outputs: &[&TypedFact]) -> TractResult<Invariants> {
-        mir_unary_invariants(inputs[0], outputs[0], self.axes)
-    }
-
-/*
-    fn change_axes(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-        io: InOut,
-        change: &AxisOp,
-    ) -> TractResult<Option<AxisChangeConsequence>> {
-        if let Some((a, axes, wire_changes)) =
-            mir_unary_change_axes(model, node, io, change, &self.axes, &self.a)?
-        {
-            let op = Self { axes, a: a.into_arc_tensor() };
-            Ok(Some(AxisChangeConsequence { substitute_op: Some(Box::new(op)), wire_changes }))
-        } else {
-            Ok(None)
-        }
-    }
-*/
-
-/*
-    fn declutter(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        if let Some(patch) = self
-            .declutter_precusor_is_concat(model, node)
-            .context("declutter precursor is concat")?
-        {
-            return Ok(Some(patch));
-        }
-        /*
-        if let Some(patch) = self
-            .declutter_successors_are_slices(model, node)
-            .context("declutter successor are slice")?
-        {
-            return Ok(Some(patch));
-        }
-        */
-        Ok(None)
-    }
-*/
-
-    fn slice(
-        &self,
-        patch: &mut TypedModelPatch,
-        prefix: &str,
-        inputs: &[OutletId],
-        output_axis: usize,
-        start: usize,
-        end: usize,
-    ) -> TractResult<Option<TVec<OutletId>>> {
-        if output_axis == self.axes.c_m {
-            let a = self.a.slice(self.axes.a_m, start, end)?.into_arc_tensor();
-            patch.wire_node(prefix, Self { a, ..self.clone() }, inputs).map(Some)
-        } else {
-            patch.wire_node(prefix, self.clone(), inputs).map(Some)
-        }
-    }
-
-    fn cost(&self, inputs: &[&TypedFact]) -> TractResult<TVec<(Cost, TDim)>> {
-        let mut cost = super::cost(
-            self.a.shape(),
-            &inputs[0].shape.to_tvec(),
-            self.a.datum_type(),
-            self.axes,
-        )?;
-        cost.push((Cost::Params(self.a.datum_type().unquantized()), self.a.len().to_dim()));
-        Ok(cost)
     }
 
     fn codegen(
@@ -288,63 +209,3 @@ op, &[wire])?[0];
 */
 }
 
-pub(super) fn mir_unary_invariants(
-    input_fact: &TypedFact,
-    output_fact: &TypedFact,
-    axes: MatMulAxes,
-) -> TractResult<Invariants> {
-    anyhow::ensure!(input_fact.shape.rank() == output_fact.shape.rank());
-    let axes = (0..input_fact.rank())
-        .filter(|ax| *ax != axes.b_k)
-        .zip((0..output_fact.rank()).filter(|ax| *ax != axes.c_m))
-        .map(|(b, c)| AxisInfo {
-            inputs: tvec!(Some(b)),
-            outputs: tvec!(Some(c)),
-            disposable: true,
-            period: 1,
-        })
-        .collect();
-    Ok(axes)
-}
-
-/*
-#[allow(clippy::type_repetition_in_bounds, clippy::type_complexity)]
-pub(super) fn mir_unary_change_axes(
-    model: &TypedModel,
-    node: &TypedNode,
-    io: InOut,
-    change: &AxisOp,
-    old_axes: &MatMulAxes,
-    old_a: &Arc<Tensor>,
-) -> TractResult<Option<(Arc<Tensor>, MatMulAxes, TVec<(InOut, AxisOp)>)>> {
-    let b_fact = model.outlet_fact(node.inputs[0])?;
-    let result = if io == InOut::In(0) {
-        old_axes.change_axis_from_b(change, b_fact.rank())
-    } else if io == InOut::Out(0) {
-        old_axes.change_axis_from_c(change, b_fact.rank())
-    } else {
-        unreachable!();
-    };
-    if let Ok((axes, change_a, change_b, change_c)) = result {
-        let new_a = if let Some(change_a) = change_a {
-            let mut new_a = old_a.clone().into_tensor();
-            if change_a.change_tensor(&mut new_a, false).is_err() {
-                return Ok(None); // can not apply change to A (Rm on non-trivial axis ?)
-            }
-            new_a.into_arc_tensor()
-        } else {
-            old_a.clone()
-        };
-        let mut wires = tvec!();
-        if let Some(change_b) = change_b {
-            wires.push((InOut::In(0), change_b));
-        }
-        if let Some(change_c) = change_c {
-            wires.push((InOut::Out(0), change_c));
-        }
-        Ok(Some((new_a, axes, wires)))
-    } else {
-        Ok(None) // is it right ? or return error ?
-    }
-}
-*/

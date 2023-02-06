@@ -156,10 +156,6 @@ impl Op for Im2Col {
         "Im2col".into()
     }
 
-    fn info(&self) -> TractResult<Vec<String>> {
-        Ok(vec![format!("groups:{}", self.group)])
-    }
-
     impl_op_same_as!();
     op_as_typed_op!();
 }

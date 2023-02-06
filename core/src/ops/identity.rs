@@ -37,9 +37,5 @@ impl TypedOp for Identity {
         TypedModelPatch::shunt_one_op(model, node)
     }
 
-    fn fuse(&self, model: &TypedModel, node: &TypedNode) -> TractResult<Option<TypedModelPatch>> {
-        TypedModelPatch::shunt_one_op(model, node)
-    }
-
     as_op!();
 }

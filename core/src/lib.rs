@@ -105,11 +105,8 @@ pub mod internal {
     pub use crate::hash::{hash_f32, hash_opt_f32, SloppyHash};
     pub use crate::late_bind::*;
     pub use crate::model::*;
-//    pub use crate::ops::change_axes::*;
-//    pub use crate::ops::element_wise::ElementWiseMiniOp;
-    pub use crate::ops::invariants::*;
     pub use crate::ops::{
-        AttrOrInput, AxisInfo, Cost, EvalOp, FrozenOpState, Invariants, Op, OpState, Validation,
+        AttrOrInput, EvalOp, FrozenOpState, Op, OpState
     };
     pub use crate::plan::SessionState;
     pub use crate::prelude::*;

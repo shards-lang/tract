@@ -87,6 +87,7 @@ impl TypedOp for MatMul {
         .map(Some)
     }
 
+/*
     fn cost(&self, inputs: &[&TypedFact]) -> TractResult<TVec<(Cost, TDim)>> {
         super::cost(
             &inputs[0].shape.to_tvec(),
@@ -95,6 +96,7 @@ impl TypedOp for MatMul {
             self.axes,
         )
     }
+*/
 
     as_op!();
 }

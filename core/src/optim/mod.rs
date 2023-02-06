@@ -63,11 +63,13 @@ impl Optimizer {
             )),
             Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
  //           Box::new(PushSplitDown),
+/*
             Box::new(OpOptim(
                 "fuse",
                 |op, _session, model, node| TypedOp::fuse(op, model, node),
                 0,
             )),
+*/
         ])
     }
 
