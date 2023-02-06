@@ -1,17 +1,19 @@
-mod depth_wise;
+//mod depth_wise;
 mod im2col;
 mod lazy_im2col;
 #[cfg(test)]
 pub mod proptest;
+/*
 #[cfg(test)]
 mod proptest_q;
 mod q_sum_b;
+*/
 mod unary;
 
 use crate::internal::*;
 
 pub use self::im2col::Im2Col;
-pub(crate) use self::q_sum_b::QSumB;
+//pub(crate) use self::q_sum_b::QSumB;
 pub use self::unary::ConvUnary;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

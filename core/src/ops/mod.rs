@@ -18,21 +18,21 @@ pub mod array;
 pub mod cast;
 pub mod change_axes;
 pub mod cnn;
-pub mod downsample;
+// pub mod downsample;
 pub mod dummy;
-pub mod fft;
+// pub mod fft;
 pub mod identity;
 pub mod konst;
-pub mod logic;
-pub mod math;
+//pub mod logic;
+//pub mod math;
 pub mod matmul;
 pub mod nn;
-pub mod quant;
-pub mod scan;
+//pub mod quant;
+// pub mod scan;
 pub mod source;
 pub mod unimpl;
 
-pub use downsample::Downsample;
+//pub use downsample::Downsample;
 pub use invariants::*;
 
 use crate::internal::*;

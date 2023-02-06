@@ -42,6 +42,7 @@ impl Packer {
         k_range: Range<usize>,
         mn_range: Range<usize>,
     ) {
+panic!();
         if self.r == 1 && k_stride == 1 && mn == 1 {
             pb.copy_from_nonoverlapping(b.add(k_range.start), k_range.len())
         } else if mn_stride == 1 {

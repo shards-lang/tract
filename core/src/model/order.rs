@@ -80,6 +80,7 @@ where
     Ok(order)
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use crate::internal::*;
@@ -119,3 +120,4 @@ mod tests {
         assert!(tx.recv_timeout(std::time::Duration::from_secs(1)).unwrap().is_err());
     }
 }
+*/

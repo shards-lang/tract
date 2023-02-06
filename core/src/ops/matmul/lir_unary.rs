@@ -224,7 +224,8 @@ fn eval(
     unsafe {
         debug_assert!(op.micro_ops.len() > 0);
         let size_of_a = (*op.micro_ops.as_ptr()).0.datum_type().size_of();
-        let mut c = Tensor::uninitialized_dt(op.c_fact.datum_type, c_shape)?;
+        let mut c = Tensor::zero_dt(op.c_fact.datum_type, c_shape)?;
+/*
         let c_storage = op.mmm.c_view(c_m_axis, c_n_axis);
         if op
             .c_fact
@@ -273,6 +274,7 @@ fn eval(
             }
             op.mmm.run_with_scratch_space(geometry.m, geometry.n, scratch, &f)?;
         }
+*/
         c.set_shape_unchecked(c_final_shape);
         Ok(tvec!(c.into_tvalue()))
     }
@@ -358,6 +360,7 @@ impl TypedOp for LirMatMulUnary {
         }
 
         if let Some(op) = succ.op_as::<ops::element_wise::ElementWiseOp>().map(|ew| ew.0.as_ref()) {
+/*
             if let Some(op) = op.downcast_ref::<ops::math::QScale>() {
                 return self.fuse_op_with_broadcast(
                     model,
@@ -366,6 +369,7 @@ impl TypedOp for LirMatMulUnary {
                     &[],
                 );
             }
+*/
             /* TODO
         } else if let Some(op) = succ.op_as::<ops::binary::UnaryOp>() {
             let binop =
@@ -387,6 +391,7 @@ impl TypedOp for LirMatMulUnary {
             let other_fact = model.outlet_fact(other_outlet)?;
             let value = node.inputs.len().into();
             return self.fuse_binary(model, node, &other_fact.shape, value, binop, &[other_outlet]);
+/*
         } else if let Some(op) = succ.op_as::<ops::binary::MergeOpUnicast>() {
             if self.micro_ops.len() == 1 && op.0.is::<ops::math::Add>() {
                 let other_slot = 1 - node.outputs[0].successors[0].slot;
@@ -402,6 +407,7 @@ impl TypedOp for LirMatMulUnary {
                     );
                 }
             }
+*/
         };
         Ok(None)
     }

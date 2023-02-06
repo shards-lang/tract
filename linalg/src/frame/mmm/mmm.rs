@@ -236,6 +236,7 @@ where
         scratch: &mut dyn ScratchSpace,
         non_linear: &[FusedSpec],
     ) -> anyhow::Result<()> {
+panic!();
         let mr = K::mr();
         let nr = K::nr();
         let scratch = scratch

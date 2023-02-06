@@ -75,7 +75,7 @@ pub mod ops;
 
 pub mod broadcast;
 pub mod framework;
-pub mod half;
+// pub mod half;
 mod hash;
 mod late_bind;
 pub mod model;

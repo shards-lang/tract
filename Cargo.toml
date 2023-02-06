@@ -94,6 +94,7 @@ walkdir = "2.3.2"
 [profile.opt-no-lto]
 inherits="release"
 lto=false
+debug = true
 
 [profile.release]
 lto = true

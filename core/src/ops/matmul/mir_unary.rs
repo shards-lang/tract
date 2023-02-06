@@ -74,6 +74,7 @@ impl TypedOp for MatMulUnary {
         }
     }
 
+/*
     fn declutter(
         &self,
         model: &TypedModel,
@@ -95,6 +96,7 @@ impl TypedOp for MatMulUnary {
         */
         Ok(None)
     }
+*/
 
     fn slice(
         &self,
@@ -131,7 +133,9 @@ impl TypedOp for MatMulUnary {
     ) -> TractResult<Option<TypedModelPatch>> {
         let b = args_1!(model.node_input_facts(node.id)?);
         if let Some(b_shape) = b.shape.as_concrete() {
-            Ok(Some(self.new_mat_mul_unary_finite(model, node, b_shape, b.datum_type)?))
+            let patch = self.new_mat_mul_unary_finite(model, node, b_shape, b.datum_type)?;
+	    std::mem::drop(patch);
+	    Ok(None)
         } else {
             Ok(None)
         }
@@ -168,6 +172,7 @@ impl MatMulUnary {
         let mut a_iter_shape: TVec<usize> = self.a.shape().into();
         a_iter_shape[self.axes.a_m] = 1;
         a_iter_shape[self.axes.a_k] = 1;
+
         let packed_as = Array::from_shape_fn(&*a_iter_shape, |a_prefix| unsafe {
             let offset = a_prefix
                 .as_array_view()
@@ -176,20 +181,28 @@ impl MatMulUnary {
                 .map(|(x, s)| *x as isize * s)
                 .sum::<isize>()
                 * self.a.datum_type().size_of() as isize;
-            let mut pa = Tensor::uninitialized_aligned_dt(
+            let mut pa = Tensor::zero_aligned_dt(
                 self.a.datum_type(),
                 &[mmm.a_pack().len(k, m)],
                 mmm.a_pack().alignment(),
             )
             .unwrap();
+/*
             mmm.a_pack().pack(
                 &mut pa.view_mut(),
                 TensorView::from_bytes(&self.a, offset, self.a.shape(), self.a.strides()),
                 self.axes.a_k,
                 self.axes.a_m,
             );
-            (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
+*/
+//            (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
+            (pa.into_arc_tensor(), vec![
+//		ProtoFusedSpec::BinScalar(AttrOrInput::Attr(rctensor0(0.0f32)), tract_linalg::mmm::BinOp::Add),
+//		ProtoFusedSpec::Store,
+		ProtoFusedSpec::Store,
+	    ])
         });
+
         unsafe {
             let mut packed_b_shape: TVec<usize> = b_shape.into();
             packed_b_shape.remove(self.axes.b_k.max(self.axes.b_n));
@@ -206,9 +219,8 @@ impl MatMulUnary {
             )?[0];
             let b_storage = mmm.b_packed(b_dt.size_of(), k);
             let geometry = ConcreteMatMulGeometry { m, k, n, b_storage };
-            wire = patch.wire_node(
-                format!("{}.matmatmul", &*node.name),
-                LirMatMulUnary {
+
+               let op = LirMatMulUnary {
                     c_fact: c_dt.fact(&c_shape),
                     geometry: MatMulGeometry::Concrete(geometry),
                     micro_ops: packed_as,
@@ -217,15 +229,20 @@ impl MatMulUnary {
                     c_final_shape: c_shape.into(),
                     reshape_post: vec![],
                     mmm,
-                },
-                &[wire],
-            )?[0];
-            patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
-            patch.obliterate(node.id)?;
+                };
+		wire = patch.wire_node(
+                format!("{}.matmatmul", &*node.name),
+op, &[wire])?[0];
+//	    dbg!("done wire_node");
+
+ //           patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
+ //           patch.obliterate(node.id)?;
         }
+
         Ok(patch)
     }
 
+/*
     fn declutter_precusor_is_concat(
         &self,
         model: &TypedModel,
@@ -266,7 +283,7 @@ impl MatMulUnary {
         }
         Ok(None)
     }
-
+*/
 }
 
 pub(super) fn mir_unary_invariants(

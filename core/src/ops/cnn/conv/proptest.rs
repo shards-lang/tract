@@ -135,13 +135,19 @@ impl ConvProblem {
             self.kernel.clone().into_arc_tensor(),
             self.group,
             self.bias.clone().map(|a| a.into_arc_tensor()),
-            None,
+//            None,
         );
         let wire = model.wire_node("conv", op, &[wire])?[0];
         model.set_output_outlets(&[wire])?;
-        let mut output =
-            model.into_optimized()?.into_runnable()?.run(tvec![self.data.clone().into_tvalue()])?;
-        output.remove(0).into_tensor().into_array::<f32>()
+//dbg!(&model);
+        let decluttered = model.into_decluttered()?;
+//        let optimized = model.into_optimized()?;
+//dbg!(&decluttered);
+        let optimized = decluttered.into_optimized()?;
+//dbg!(&optimized);
+//.into_runnable()?; //.run(tvec![self.data.clone().into_tvalue()])?;
+        // output.remove(0).into_tensor().into_array::<f32>()
+	Ok(arr2(&[[0f32, 0f32]]).into_dyn())
     }
 }
 

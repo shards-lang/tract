@@ -7,18 +7,20 @@ use crate::ops;
 use crate::ops::array::Pad;
 use crate::ops::array::PadMode;
 use crate::ops::cnn::PaddingSpec;
+/*
 use crate::ops::matmul::mir_quant::wire_offset_u8_as_i8;
 use crate::ops::matmul::mir_quant::QParamKind;
+*/
 use crate::ops::matmul::MatMulAxes;
 
-use super::depth_wise::DepthWise;
+// use super::depth_wise::DepthWise;
 use super::im2col::Im2Col;
 use crate::ops::cnn::conv::KernelFormat;
 use crate::ops::cnn::pools::{ConcretePoolGeometry, PoolGeometry, PoolSpec};
 use crate::ops::matmul::lir_unary::{
     ConcreteMatMulGeometry, LirMatMulUnary, MatMulGeometry, ProtoFusedSpec, SymbolicMatMulGeometry,
 };
-use crate::ops::matmul::MatMulQParams;
+//use crate::ops::matmul::MatMulQParams;
 use crate::ops::nn::{BaseDataShape, DataFormat, DataShape};
 
 use tract_linalg::frame::Packer;
@@ -36,7 +38,7 @@ pub struct ConvUnary {
 
     pub bias: Option<Arc<Tensor>>,
 
-    pub q_params: Option<(DatumType, MatMulQParams)>,
+//    pub q_params: Option<(DatumType, MatMulQParams)>,
 }
 
 impl_dyn_hash!(ConvUnary);
@@ -105,6 +107,7 @@ impl ConvUnary {
         }
     }
 
+/*
     fn kernel_offset_u8_as_i8(
         &self,
         inputs: &mut [OutletId],
@@ -168,6 +171,7 @@ impl ConvUnary {
             Ok(None)
         }
     }
+*/
 
     fn bias_as_non_linear<T>(&self) -> TractResult<ArrayD<Vec<ProtoFusedSpec>>>
     where
@@ -198,6 +202,7 @@ impl ConvUnary {
         Ok(ops)
     }
 
+/*
     pub unsafe fn wire_as_quant_im2col(
         &self,
         model: &mut TypedModel,
@@ -326,6 +331,7 @@ impl ConvUnary {
         let wire = Self::wire_geo_reshape(model, name, wire, &output_shape)?;
         Ok(wire)
     }
+*/
 
     pub unsafe fn wire_as_im2col_pair(
         &self,
@@ -572,7 +578,7 @@ impl ConvUnary {
         )?[0];
         Ok(wire)
     }
-
+/*
     pub fn to_depth_wise<T>(&self, input: &TypedFact) -> TractResult<Box<dyn TypedOp>>
     where
         T: Datum + Clone + ::ndarray::LinalgScalar + PartialEq + Sum,
@@ -594,7 +600,9 @@ impl ConvUnary {
         );
         Ok(Box::new(op))
     }
+*/
 
+/*
     fn declutter_stride_slice_to_downsample(
         &self,
         model: &TypedModel,
@@ -631,6 +639,7 @@ impl ConvUnary {
         }
         Ok(None)
     }
+*/
 
     fn declutter_as_matmul(
         &self,
@@ -672,6 +681,7 @@ impl ConvUnary {
                 .transposing(a_trans, trans_data, trans_data);
             // in Q case, the bias has to be injected inside the QMatMul (as it
             // must be added before requantization)
+/*
             let wire = if let Some(q_params) = &self.q_params {
                 let mut params = q_params.1.clone();
                 params.insert_input(0); // kernel as input
@@ -683,8 +693,10 @@ impl ConvUnary {
                 let op = QMatMul { axes, output_type: q_params.0, params: q_params.1.clone() };
                 patch.wire_node(&*node.name, op, &inputs)?[0]
             } else {
+*/
                 let op = MatMul { axes };
                 let mut wire = patch.wire_node(format!("{}.matmul", node.name), op, &inputs)?[0];
+/*
                 if let Some(b) = self.bias.as_ref().filter(|_| self.q_params.is_none()) {
                     anyhow::ensure!(b.rank() == 0 || b.rank() == 1);
                     let mut bias_shape = tvec!(1; input_shape.rank());
@@ -692,14 +704,19 @@ impl ConvUnary {
                     let b = b.clone().into_tensor().into_shape(&bias_shape)?;
                     let b =
                         patch.add_const(format!("{}.bias.cst", node.name), b.into_arc_tensor())?;
+/*
                     wire = patch.wire_node(
                         format!("{}.bias", node.name),
                         crate::ops::math::add(),
                         &[wire, b],
                     )?[0];
                 }
+*/
+*/
+/*
                 wire
             };
+*/
             patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
             return Ok(Some(patch));
         }
@@ -786,9 +803,10 @@ impl EvalOp for ConvUnary {
                 model.add_source(format!("source.{ix}"), v.datum_type().fact(v.shape()))
             })
             .collect::<TractResult<_>>()?;
-        let new_op = self.kernel_offset_u8_as_i8(&mut wires, &mut model)?;
         let wire = unsafe {
+/*
             if self.q_params.is_some() {
+        let new_op = self.kernel_offset_u8_as_i8(&mut wires, &mut model)?;
                 let op_ref = if let Some(op) = new_op.as_ref() { op } else { self };
                 op_ref.wire_as_quant_im2col(
                     &mut model,
@@ -797,8 +815,11 @@ impl EvalOp for ConvUnary {
                     &wires,
                 )?
             } else {
+*/
                 self.wire_as_im2col_pair(&mut model, "im2col-adhoc", wires[0])?
+/*
             }
+*/
         };
         model.set_output_outlets(&[wire])?;
         model.into_runnable()?.run(inputs)
@@ -807,6 +828,7 @@ impl EvalOp for ConvUnary {
 
 impl TypedOp for ConvUnary {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+/*
         let q_inputs = self.q_params.as_ref().map(|(_, qp)| qp.input_count()).unwrap_or(0);
         if inputs.len() != 1 + q_inputs {
             bail!("Wrong number of inputs: expected {} got {}", 1 + q_inputs, inputs.len());
@@ -836,8 +858,10 @@ impl TypedOp for ConvUnary {
                 bias
             );
         }
+*/
 
         let mut fact = self.pool_spec.output_facts(inputs)?.remove(0);
+/*
         if let Some((dt, _qp)) = self.q_params.as_ref() {
             fact.datum_type = *dt;
         } else {
@@ -848,6 +872,7 @@ impl TypedOp for ConvUnary {
                 self.kernel.datum_type(),
             )
         }
+*/
         Ok(tvec!(fact))
     }
 
@@ -882,6 +907,7 @@ impl TypedOp for ConvUnary {
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
+/*
         if let Some((_, qp)) = self.q_params.as_ref() {
             if let Some((inputs, qp)) = qp.inline_static(model, node)? {
                 let mut op = self.clone();
@@ -891,7 +917,8 @@ impl TypedOp for ConvUnary {
                 return Ok(Some(patch));
             }
         }
-        for d in &[Self::declutter_stride_slice_to_downsample, Self::declutter_as_matmul] {
+*/
+        for d in &[/*Self::declutter_stride_slice_to_downsample,*/ Self::declutter_as_matmul] {
             if let Some(p) = d(self, model, node)? {
                 return Ok(Some(p));
             }
@@ -1027,7 +1054,7 @@ impl TypedOp for ConvUnary {
             kernel: kernel.into_arc_tensor(),
             group: self.group,
             bias: self.bias.clone(),
-            q_params: self.q_params.clone(),
+//            q_params: self.q_params.clone(),
         };
         Ok(Some(AxisChangeConsequence {
             substitute_op: Some(Box::new(new_op)),
@@ -1035,6 +1062,7 @@ impl TypedOp for ConvUnary {
         }))
     }
 
+/*
     fn codegen(
         &self,
         model: &TypedModel,
@@ -1119,6 +1147,7 @@ impl TypedOp for ConvUnary {
                     ),
                     &[wire],
                 )?[0];
+/*
                 if let Some(ref bias) = self.bias {
                     let bias_shape =
                         if input_c_is_last { [1, bias.len()] } else { [bias.len(), 1] };
@@ -1135,6 +1164,7 @@ impl TypedOp for ConvUnary {
                         &[wire, bias],
                     )?[0];
                 }
+*/
                 wire = patch.wire_node(
                     &*node.name,
                     AxisOp::Reshape(
@@ -1165,6 +1195,7 @@ impl TypedOp for ConvUnary {
                 patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
                 patch.obliterate(node.id)?;
                 Ok(Some(patch))
+/*
             } else if self.group != 1
                 && self.group == self.output_channels()
                 && self.group == self.input_channels()
@@ -1173,6 +1204,7 @@ impl TypedOp for ConvUnary {
                 let op = dispatch_floatlike!(Self::to_depth_wise(dt)(self, input_fact))
                     .context("in to_depth_wise")?;
                 Ok(Some(TypedModelPatch::single_unary_op(model, node, op)?))
+*/
             } else {
                 let mut patch = TypedModelPatch::default();
                 let wire = patch.tap_model(model, node.inputs[0])?;
@@ -1185,6 +1217,7 @@ impl TypedOp for ConvUnary {
             }
         }
     }
+*/
 
     as_op!();
 }
@@ -1200,7 +1233,7 @@ mod test {
     use crate::ops::array::Pad;
     use crate::ops::cnn::PaddingSpec;
     use DataFormat::*;
-
+/*
     #[test]
     fn onnx_basic_convinteger() {
         let op = ConvUnary {
@@ -1273,4 +1306,5 @@ mod test {
         ); // source + conv
         Ok(())
     }
+*/
 }

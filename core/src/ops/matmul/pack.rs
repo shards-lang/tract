@@ -39,8 +39,9 @@ impl EvalOp for MatMatMulPack {
         unsafe {
             let output_shape = self.output_shape(b.shape());
             let mut packed =
-                Tensor::uninitialized_aligned_dt(dt, &output_shape, self.packer.alignment())
+                Tensor::zero_aligned_dt(dt, &output_shape, self.packer.alignment())
                     .unwrap();
+/*
             let mut bc_shape: TVec<usize> = b.shape().into();
             bc_shape[self.k_axis] = 1;
             bc_shape[self.mn_axis] = 1;
@@ -62,6 +63,7 @@ impl EvalOp for MatMatMulPack {
                     self.mn_axis,
                 )
             }
+*/
             Ok(tvec!(packed.into_tvalue()))
         }
     }
