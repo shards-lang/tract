@@ -6,7 +6,6 @@ use crate::model::*;
 use crate::ops;
 use crate::ops::matmul::MatMulAxes;
 
-use super::im2col::Im2Col;
 use crate::ops::cnn::conv::KernelFormat;
 use crate::ops::cnn::pools::{ConcretePoolGeometry, PoolGeometry, PoolSpec};
 use crate::ops::matmul::lir_unary::{
@@ -124,54 +123,6 @@ impl ConvUnary {
             ops.insert_axis_inplace(Axis(0));
         }
         Ok(ops)
-    }
-
-    pub unsafe fn wire_as_im2col_pair(
-        &self,
-        model: &mut TypedModel,
-        name: &str,
-        mut wire: OutletId,
-    ) -> TractResult<OutletId> {
-        let b_fact = model.outlet_fact(wire)?.clone();
-        let b_dt = b_fact.datum_type;
-        let c_dt = crate::ops::matmul::output_type(b_fact.datum_type);
-
-        let output_shape = self.pool_spec.output_shape(&b_fact.shape)?;
-        let (_, m, k, n, mmm) = self.compute_geo(model.outlet_fact(wire)?)?;
-        let padding = model.add_const(format!("{name}.b0"), Tensor::zero_dt(b_dt, &[])?)?;
-
-        wire = model.wire_node(
-            format!("{name}.im2col"),
-            Im2Col::new(self.pool_spec.clone(), self.group, k, &b_fact.shape, mmm.clone())?,
-            &[wire, padding],
-        )?[0];
-
-        let (mmm_output_shape, c_axis, h_axis) = self.mmm_output_shape(&output_shape)?;
-        let mut geometry = MatMulGeometry::from(SymbolicMatMulGeometry {
-            b_datum_type: b_dt,
-            m: m.to_dim(),
-            k: k.to_dim(),
-            n: n.clone(),
-            mmm: mmm.clone(),
-        });
-        if n.to_usize().is_ok() {
-            geometry = geometry.optimize_if(Some(&SymbolValues::default()))?;
-        }
-        let mut wire = self.wire_lir_matmatmul(
-            model,
-            name,
-            wire,
-            mmm,
-            c_dt,
-            mmm_output_shape.clone().into(),
-            m.to_usize().unwrap(),
-            k.to_usize().unwrap(),
-            geometry,
-            c_axis,
-            h_axis,
-        )?;
-
-        Ok(wire)
     }
 
     fn mmm_output_shape<D: DimLike>(

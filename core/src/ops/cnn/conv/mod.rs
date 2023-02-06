@@ -1,11 +1,9 @@
-mod im2col;
 #[cfg(test)]
 pub mod proptest;
 mod unary;
 
 use crate::internal::*;
 
-pub use self::im2col::Im2Col;
 //pub(crate) use self::q_sum_b::QSumB;
 pub use self::unary::ConvUnary;
 
