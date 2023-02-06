@@ -12,7 +12,6 @@ use crate::ops::cnn::pools::{ConcretePoolGeometry, PoolGeometry, PoolSpec};
 use crate::ops::matmul::lir_unary::{
     ConcreteMatMulGeometry, LirMatMulUnary, MatMulGeometry, ProtoFusedSpec, SymbolicMatMulGeometry,
 };
-//use crate::ops::matmul::MatMulQParams;
 use crate::ops::nn::{BaseDataShape, DataFormat, DataShape};
 
 use tract_linalg::frame::Packer;
@@ -30,7 +29,6 @@ pub struct ConvUnary {
 
     pub bias: Option<Arc<Tensor>>,
 
-//    pub q_params: Option<(DatumType, MatMulQParams)>,
 }
 
 impl_dyn_hash!(ConvUnary);
@@ -99,72 +97,6 @@ impl ConvUnary {
         }
     }
 
-/*
-    fn kernel_offset_u8_as_i8(
-        &self,
-        inputs: &mut [OutletId],
-        model: &mut TypedModel,
-    ) -> TractResult<Option<Self>> {
-        if let DatumType::U8 = self.kernel.datum_type().unquantized() {
-            let new_op = Self {
-                kernel: self.kernel.offset_u8_as_i8(),
-                q_params: self
-                    .q_params
-                    .as_ref()
-                    .map(|(dt, qp)| -> TractResult<_> {
-                        let a0 = match &qp.a0 {
-                            QParamKind::Attr(_) | QParamKind::FromQType => {
-                                qp.a0.offset_u8_as_i8(model, &[])?
-                            }
-                            QParamKind::FromInput(i) => {
-                                match model.outlet_fact(inputs[*i])?.datum_type.unquantized() {
-                                    DatumType::U8 => {
-                                        inputs[*i] = model.wire_node(
-                                            format!(
-                                                "{}.offset_{}_as_i8",
-                                                model.node(inputs[*i].node).name,
-                                                "a0"
-                                            ),
-                                            ops::quant::offset_u8_as_i8(),
-                                            &[inputs[*i]],
-                                        )?[0];
-                                    }
-                                    DatumType::I32 => {
-                                        let cst = model.add_const(
-                                            format!(
-                                                "{}.offset_{}_as_i8.cst",
-                                                &model.node(inputs[*i].node).name,
-                                                "a0"
-                                            ),
-                                            rctensor0(-128i32),
-                                        )?;
-                                        inputs[*i] = model.wire_node(
-                                            format!(
-                                                "{}.offset_{}_as_i8",
-                                                model.node(inputs[*i].node).name,
-                                                "a0"
-                                            ),
-                                            ops::math::add(),
-                                            &[inputs[*i], cst],
-                                        )?[0];
-                                    }
-                                    _ => (),
-                                }
-                                QParamKind::FromInput(*i)
-                            }
-                        };
-                        Ok((*dt, MatMulQParams { a0, ..qp.clone() }))
-                    })
-                    .transpose()?,
-                ..self.clone()
-            };
-            Ok(Some(new_op))
-        } else {
-            Ok(None)
-        }
-    }
-*/
-
     fn bias_as_non_linear<T>(&self) -> TractResult<ArrayD<Vec<ProtoFusedSpec>>>
     where
         T: Datum + Copy,
@@ -193,137 +125,6 @@ impl ConvUnary {
         }
         Ok(ops)
     }
-
-/*
-    pub unsafe fn wire_as_quant_im2col(
-        &self,
-        model: &mut TypedModel,
-        name: &str,
-        b_dt: DatumType,
-        wires: &[OutletId],
-    ) -> TractResult<OutletId> {
-        use crate::ops::matmul::mir_quant as qmm;
-
-        let c_dt = self.q_params.as_ref().unwrap().0;
-
-        let params = self.q_params.as_ref().unwrap().1.as_outlet_ids(
-            model,
-            name,
-            wires,
-            self.kernel.datum_type(),
-            b_dt,
-            c_dt,
-        )?;
-
-        let a0 = params[0];
-        let a_scale = params[1];
-        let mut b0 = params[2];
-        let b_scale = params[3];
-        let c0 = params[4];
-        let c_scale = params[5];
-
-        let b = wire_offset_u8_as_i8(model, name, wires[0], "b", &mut b0, "b0")?;
-        let b_fact = model.outlet_fact(b)?.clone();
-        let (_, m, k, n, mmm) = self.compute_geo(&b_fact)?;
-        let output_shape = self.pool_spec.output_shape(&b_fact.shape)?;
-
-        let abc_scale = qmm::combine_scales(model, name, a_scale, b_scale, c_scale)?;
-
-        let im2col = model.wire_node(
-            format!("{name}.im2col"),
-            Im2Col::new(self.pool_spec.clone(), self.group, k, &b_fact.shape, mmm.clone())?,
-            &[b, b0],
-        )?[0];
-
-        let a = self.kernel_as_group_o_ihw()?.into_tensor();
-        let a = a.cast_to_dt(i32::datum_type())?;
-        let a = a.to_array_view::<i32>()?;
-        let mut sum_a = a.sum_axis(Axis(a.ndim() - 1));
-        if self.group == 1 {
-            sum_a.index_axis_inplace(Axis(0), 0);
-        }
-
-        if self.pool_spec.data_format.has_n() {
-            sum_a.insert_axis_inplace(Axis(0));
-        }
-        let sum_a = model.add_const(format!("{name}.sum_a"), sum_a)?;
-
-        let mut sum_b = model.wire_node(
-            format!("{name}.sum_b"),
-            super::QSumB { n: n.clone(), r: mmm.b_pack().panel_width(), k },
-            &[im2col],
-        )?[0];
-
-        if self.group > 1 && self.pool_spec.data_format.c_is_last() {
-            let has_n = self.pool_spec.data_format.has_n() as usize;
-            sum_b = model.wire_node(
-                format!("{name}.transpose_sum_b"),
-                AxisOp::Move(has_n, 1 + has_n),
-                &[sum_b],
-            )?[0];
-        }
-
-        let b_dt = model.outlet_fact(b)?.datum_type;
-        let (mmm_output_shape, c_axis, h_axis) = self.mmm_output_shape(&output_shape)?;
-        let mut geometry = MatMulGeometry::from(SymbolicMatMulGeometry {
-            b_datum_type: b_dt,
-            m: m.to_dim(),
-            k: k.to_dim(),
-            n: n.clone(),
-            mmm: mmm.clone(),
-        });
-        if n.to_usize().is_ok() {
-            geometry = geometry.optimize_if(Some(&SymbolValues::default()))?;
-        }
-        let wire = self.wire_lir_matmatmul(
-            model,
-            name,
-            im2col,
-            mmm,
-            i32::datum_type(),
-            mmm_output_shape.clone().into(),
-            m,
-            k,
-            geometry,
-            c_axis,
-            h_axis,
-        )?;
-        let has_n = self.pool_spec.data_format.has_n() as usize;
-        let has_group = (self.group > 1) as usize;
-        let (m_axis, n_axis) = if self.pool_spec.data_format.c_is_last() {
-            (1 + has_group + has_n, has_n)
-        } else {
-            (has_group + has_n, 1 + has_n + has_group)
-        };
-        let wire = qmm::compensate_zero_points(
-            model,
-            name,
-            wire,
-            k.to_dim(),
-            a0,
-            b0,
-            sum_a,
-            sum_b,
-            m_axis,
-            n_axis,
-        )?;
-
-        let mut wire = qmm::requant(model, name, wire, c_dt, abc_scale, c0)?;
-        if self.group > 1 {
-            wire = model.wire_node(
-                format!("{name}.reshape_group"),
-                AxisOp::Reshape(
-                    c_axis - 1,
-                    mmm_output_shape[c_axis - 1..][..2].iter().map(|d| d.to_dim()).collect(),
-                    tvec!((m * self.group).to_dim()),
-                ),
-                &[wire],
-            )?[0];
-        }
-        let wire = Self::wire_geo_reshape(model, name, wire, &output_shape)?;
-        Ok(wire)
-    }
-*/
 
     pub unsafe fn wire_as_im2col_pair(
         &self,
@@ -464,68 +265,6 @@ impl ConvUnary {
         )?[0];
         Ok(wire)
     }
-/*
-    pub fn to_depth_wise<T>(&self, input: &TypedFact) -> TractResult<Box<dyn TypedOp>>
-    where
-        T: Datum + Clone + ::ndarray::LinalgScalar + PartialEq + Sum,
-    {
-        let input_shape = input.shape.as_concrete().unwrap();
-        let ConcretePoolGeometry { input_shape, patch, output_shape } =
-            self.pool_spec.compute_geo(&input.shape)?.to_concrete(input_shape)?.into_owned();
-        let bias = if let Some(b) = &self.bias {
-            b.clone()
-        } else {
-            Tensor::zero::<T>(&[*input_shape.c()])?.into_arc_tensor()
-        };
-        let op = DepthWise::new(
-            patch,
-            input_shape,
-            output_shape,
-            self.kernel_as_group_o_ihw().context("in kernel_as_group_o_ihw")?,
-            bias,
-        );
-        Ok(Box::new(op))
-    }
-*/
-
-/*
-    fn declutter_stride_slice_to_downsample(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        let input_fact = model.outlet_fact(node.inputs[0])?;
-        let spatial_rank = self.kernel.rank() - 2;
-        if let Some(axis) = (0..spatial_rank).find(|&ax| {
-            self.pool_spec.stride(ax) > 1
-                && (self.pool_spec.kernel_shape[ax] == 1
-                    || (self.pool_spec.padding.valid_dim(ax, self.pool_spec.stride(ax) == 1)
-                        && self.pool_spec.dilation(ax) % self.pool_spec.stride(ax) == 0))
-        }) {
-            let downsample_factor = self.pool_spec.stride(axis);
-            let mut new_op = self.clone();
-            if new_op.pool_spec.dilation(axis) > 1 {
-                new_op.pool_spec.dilations.as_mut().unwrap()[axis] /= downsample_factor;
-            }
-            new_op.pool_spec.strides.as_mut().unwrap()[axis] /= downsample_factor;
-            let mut patch = TypedModelPatch::default();
-            let tap = patch.tap_model(model, node.inputs[0])?;
-            let shape = self
-                .pool_spec
-                .data_format
-                .shape(input_fact.shape.iter().collect::<TVec<TDim>>())?;
-            let down = patch.wire_node(
-                format!("{}.downsample.{}", node.name, axis),
-                crate::ops::Downsample::new(axis + shape.h_axis(), downsample_factor as isize, 0),
-                &[tap],
-            )?;
-            let id = patch.wire_node(&*node.name, new_op, &down)?[0];
-            patch.shunt_outside(model, OutletId::new(node.id, 0), id)?;
-            return Ok(Some(patch));
-        }
-        Ok(None)
-    }
-*/
 
     fn declutter_as_matmul(
         &self,
@@ -567,89 +306,13 @@ impl ConvUnary {
                 .transposing(a_trans, trans_data, trans_data);
             // in Q case, the bias has to be injected inside the QMatMul (as it
             // must be added before requantization)
-/*
-            let wire = if let Some(q_params) = &self.q_params {
-                let mut params = q_params.1.clone();
-                params.insert_input(0); // kernel as input
-                params.insert_input(2); // bias as input
-                let bias = self.bias.clone().unwrap_or_else(|| rctensor0(0i32));
-                anyhow::ensure!(bias.rank() == 0 || bias.rank() == 1);
-                let bias = patch.add_const(format!("{}.bias", &node.name), bias)?;
-                inputs.insert(2, bias);
-                let op = QMatMul { axes, output_type: q_params.0, params: q_params.1.clone() };
-                patch.wire_node(&*node.name, op, &inputs)?[0]
-            } else {
-*/
                 let op = MatMul { axes };
                 let mut wire = patch.wire_node(format!("{}.matmul", node.name), op, &inputs)?[0];
-/*
-                if let Some(b) = self.bias.as_ref().filter(|_| self.q_params.is_none()) {
-                    anyhow::ensure!(b.rank() == 0 || b.rank() == 1);
-                    let mut bias_shape = tvec!(1; input_shape.rank());
-                    bias_shape[input_shape.c_axis()] = co;
-                    let b = b.clone().into_tensor().into_shape(&bias_shape)?;
-                    let b =
-                        patch.add_const(format!("{}.bias.cst", node.name), b.into_arc_tensor())?;
-/*
-                    wire = patch.wire_node(
-                        format!("{}.bias", node.name),
-                        crate::ops::math::add(),
-                        &[wire, b],
-                    )?[0];
-                }
-*/
-*/
-/*
-                wire
-            };
-*/
             patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
             return Ok(Some(patch));
         }
         Ok(None)
     }
-
-/*
-    fn declutter_precursor_padding(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        if self.pool_spec.padding != PaddingSpec::Valid
-            && !matches!(self.pool_spec.padding, PaddingSpec::Explicit(_, _, _))
-        {
-            return Ok(None);
-        }
-        let prec = model.node(node.inputs[0].node);
-        let pad = if let Some(pad) = prec.op_as::<Pad>() { pad } else { return Ok(None) };
-        let value = if let PadMode::Constant(c) = &pad.mode {
-            c
-        } else {
-            return Ok(None);
-        };
-        let shape = self.pool_spec.data_format.shape(&model.outlet_fact(node.inputs[0])?.shape)?;
-        if value.cast_to_scalar::<i64>()? != 0
-            || (self.pool_spec.data_format.has_n() && pad.pads[0] != (0, 0))
-            || pad.pads[shape.c_axis()] != (0, 0)
-        {
-            return Ok(None);
-        }
-        let mut before: TVec<usize> = pad.pads[shape.hw_axes()].iter().map(|pair| pair.0).collect();
-        let mut after: TVec<usize> = pad.pads[shape.hw_axes()].iter().map(|pair| pair.1).collect();
-        if let PaddingSpec::Explicit(bef, aft, false) = &self.pool_spec.padding {
-            izip!(&mut before, bef).for_each(|(pad, cv)| *pad += cv);
-            izip!(&mut after, aft).for_each(|(pad, cv)| *pad += cv);
-        }
-        let padding = PaddingSpec::Explicit(before, after, false);
-        let mut new = self.clone();
-        new.pool_spec.padding = padding;
-        let mut patch = TypedModelPatch::default();
-        let wire = patch.tap_model(model, prec.inputs[0])?;
-        let wire = patch.wire_node(&node.name, new, &[wire])?;
-        patch.shunt_outside(model, node.id.into(), wire[0])?;
-        Ok(Some(patch))
-    }
-*/
 }
 
 impl Op for ConvUnary {
@@ -667,22 +330,6 @@ impl EvalOp for ConvUnary {
 
     fn eval(&self, inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
 panic!()
-/*
-        let mut model = TypedModel::default();
-
-        let mut wires: TVec<OutletId> = inputs
-            .iter()
-            .enumerate()
-            .map(|(ix, v)| {
-                model.add_source(format!("source.{ix}"), v.datum_type().fact(v.shape()))
-            })
-            .collect::<TractResult<_>>()?;
-        let wire = unsafe {
-                self.wire_as_im2col_pair(&mut model, "im2col-adhoc", wires[0])?
-        };
-        model.set_output_outlets(&[wire])?;
-        model.into_runnable()?.run(inputs)
-*/
     }
 }
 
