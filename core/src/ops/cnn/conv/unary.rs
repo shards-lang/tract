@@ -4,16 +4,8 @@ use tract_data::itertools::izip;
 use crate::internal::*;
 use crate::model::*;
 use crate::ops;
-use crate::ops::array::Pad;
-use crate::ops::array::PadMode;
-use crate::ops::cnn::PaddingSpec;
-/*
-use crate::ops::matmul::mir_quant::wire_offset_u8_as_i8;
-use crate::ops::matmul::mir_quant::QParamKind;
-*/
 use crate::ops::matmul::MatMulAxes;
 
-// use super::depth_wise::DepthWise;
 use super::im2col::Im2Col;
 use crate::ops::cnn::conv::KernelFormat;
 use crate::ops::cnn::pools::{ConcretePoolGeometry, PoolGeometry, PoolSpec};
@@ -617,6 +609,7 @@ impl ConvUnary {
         Ok(None)
     }
 
+/*
     fn declutter_precursor_padding(
         &self,
         model: &TypedModel,
@@ -656,6 +649,7 @@ impl ConvUnary {
         patch.shunt_outside(model, node.id.into(), wire[0])?;
         Ok(Some(patch))
     }
+*/
 }
 
 impl Op for ConvUnary {
@@ -672,6 +666,8 @@ impl EvalOp for ConvUnary {
     }
 
     fn eval(&self, inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
+panic!()
+/*
         let mut model = TypedModel::default();
 
         let mut wires: TVec<OutletId> = inputs
@@ -686,6 +682,7 @@ impl EvalOp for ConvUnary {
         };
         model.set_output_outlets(&[wire])?;
         model.into_runnable()?.run(inputs)
+*/
     }
 }
 
@@ -700,15 +697,7 @@ impl TypedOp for ConvUnary {
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        for d in &[/*Self::declutter_stride_slice_to_downsample,*/ Self::declutter_as_matmul] {
-            if let Some(p) = d(self, model, node)? {
-                return Ok(Some(p));
-            }
-        }
-        if let Some(p) = self.declutter_precursor_padding(model, node)? {
-            return Ok(Some(p));
-        }
-        Ok(None)
+	self.declutter_as_matmul(model, node)
     }
 
     as_op!();

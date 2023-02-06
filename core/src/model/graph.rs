@@ -488,11 +488,6 @@ where
         Ok(())
     }
 
-    /// Converts the model into a `RunnableModel` which fixes the inputs and outputs and allows passing data through the model.
-    pub fn into_runnable(self) -> TractResult<RunnableModel<F, O, Self>> {
-        crate::plan::SimplePlan::new(self)
-    }
-
     pub fn single_prec(&self, id: usize) -> TractResult<Option<&Node<F, O>>> {
         let node = &self.nodes()[id];
         if node.inputs.len() != 1 {

@@ -8,7 +8,6 @@ use dyn_clone;
 #[macro_use]
 pub mod macros;
 
-pub mod array;
 pub mod cnn;
 pub mod dummy;
 pub mod identity;
@@ -21,17 +20,7 @@ pub mod unimpl;
 use crate::internal::*;
 use crate::optim::OptimizerSession;
 
-pub trait FrozenOpState: fmt::Debug + dyn_clone::DynClone + Send + 'static {
-    fn unfreeze(&self) -> Box<dyn OpState>;
-}
-
-pub trait OpStateFreeze {
-    fn freeze(&self) -> Box<dyn FrozenOpState>;
-}
-
-dyn_clone::clone_trait_object!(FrozenOpState);
-
-pub trait OpState: fmt::Debug + dyn_clone::DynClone + OpStateFreeze {
+pub trait OpState: fmt::Debug + dyn_clone::DynClone {
     fn eval(
         &mut self,
         session: &mut SessionState,

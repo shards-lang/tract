@@ -125,7 +125,6 @@ impl Op for LirMatMulUnary {
 
 #[derive(Clone, Debug)]
 struct State;
-trivial_op_state_freeeze!(State);
 
 impl OpState for State {
     fn eval(

@@ -75,7 +75,6 @@ pub mod ops;
 
 pub mod broadcast;
 pub mod framework;
-// pub mod half;
 mod hash;
 mod late_bind;
 pub mod model;
@@ -90,7 +89,6 @@ pub mod prelude {
     pub use crate::framework::Framework;
     pub use crate::model::*;
     pub use crate::value::{IntoTValue, TValue};
-    pub use crate::plan::{SimplePlan, SimpleState};
     pub use std::sync::Arc;
     pub use tract_data::prelude::*;
 
@@ -105,9 +103,7 @@ pub mod internal {
     pub use crate::hash::{hash_f32, hash_opt_f32, SloppyHash};
     pub use crate::late_bind::*;
     pub use crate::model::*;
-    pub use crate::ops::{
-        AttrOrInput, EvalOp, FrozenOpState, Op, OpState
-    };
+    pub use crate::ops::{ AttrOrInput, EvalOp, Op, OpState };
     pub use crate::plan::SessionState;
     pub use crate::prelude::*;
     pub use anyhow::{anyhow, bail, ensure, format_err, Context as TractErrorContext};
