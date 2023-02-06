@@ -30,6 +30,7 @@ impl TypedOp for Const {
         Ok(tvec!(self.0.as_ref().into()))
     }
 
+/*
     fn change_axes(
         &self,
         _model: &TypedModel,
@@ -48,6 +49,7 @@ impl TypedOp for Const {
             Ok(None)
         }
     }
+*/
 
     fn invariants(&self, inputs: &[&TypedFact], outputs: &[&TypedFact]) -> TractResult<Invariants> {
         Invariants::new_element_wise(inputs, outputs)

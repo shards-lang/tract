@@ -5,8 +5,10 @@ pub mod mir;
 pub mod mir_unary;
 pub mod pack;
 
+/*
 #[cfg(test)]
 mod change_axis_test;
+*/
 
 use crate::internal::*;
 use tract_itertools::Itertools;
@@ -68,6 +70,7 @@ impl MatMulAxes {
         }
         it
     }
+/*
 
     // return matching axis index in a and c
     fn follow_axis_from_b(&self, in_b: usize) -> (usize, usize) {
@@ -286,6 +289,7 @@ impl MatMulAxes {
             Some(AxisOp::Reshape(in_c, before.into(), after.into())),
         ))
     }
+*/
 
     pub fn to_array(&self) -> [usize; 6] {
         [self.a_m, self.a_k, self.b_k, self.b_n, self.c_m, self.c_n]

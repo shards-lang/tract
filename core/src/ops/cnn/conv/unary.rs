@@ -378,6 +378,7 @@ impl ConvUnary {
             h_axis,
         )?;
 
+/*
         if self.group > 1 {
             wire = model.wire_node(
                 format!("{name}.reshape_group"),
@@ -390,6 +391,7 @@ impl ConvUnary {
             )?[0];
         }
         let wire = Self::wire_geo_reshape(model, name, wire, &output_shape)?;
+*/
         Ok(wire)
     }
 
@@ -420,6 +422,7 @@ impl ConvUnary {
         Ok((mmm_output_shape, c_axis, h_axis))
     }
 
+/*
     fn wire_geo_reshape<D: DimLike>(
         model: &mut TypedModel,
         name: &str,
@@ -438,7 +441,9 @@ impl ConvUnary {
         )?;
         Ok(wire[0])
     }
+*/
 
+/*
     pub unsafe fn wire_as_lazy_im2col(
         &self,
         model: &mut TypedModel,
@@ -513,6 +518,7 @@ impl ConvUnary {
         let wire = Self::wire_geo_reshape(model, name, wire, &geo.output_shape)?;
         Ok(wire)
     }
+*/
 
     #[allow(clippy::type_complexity)]
     fn compute_geo(
@@ -570,7 +576,7 @@ impl ConvUnary {
                 c_m_axis,
                 c_n_axis,
                 c_final_shape: mmm_output_shape,
-                reshape_post: vec![],
+//                reshape_post: vec![],
                 geometry,
                 mmm,
             },
@@ -965,6 +971,7 @@ impl TypedOp for ConvUnary {
         ))
     }
 
+/*
     fn change_axes(
         &self,
         model: &TypedModel,
@@ -1061,6 +1068,7 @@ impl TypedOp for ConvUnary {
             wire_changes: tvec!((InOut::In(0), change.clone()), (InOut::Out(0), change.clone())),
         }))
     }
+*/
 
 /*
     fn codegen(

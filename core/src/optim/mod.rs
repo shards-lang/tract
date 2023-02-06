@@ -3,16 +3,16 @@ use std::collections::HashSet;
 use std::fmt::Debug;
 use tract_itertools::Itertools;
 
-pub mod change_axes;
+//pub mod change_axes;
 mod op_optim;
 mod prop_const;
-mod push_split_down;
-mod slice;
+// mod push_split_down;
+// mod slice;
 
-use self::change_axes::ChangeAxes;
+//use self::change_axes::ChangeAxes;
 use self::prop_const::PropConst;
-use self::push_split_down::PushSplitDown;
-use self::slice::PushSliceUp;
+// use self::push_split_down::PushSplitDown;
+// use self::slice::PushSliceUp;
 use op_optim::OpOptim;
 
 pub trait TypedPass: Debug + Send + Sync + dyn_clone::DynClone {
@@ -45,9 +45,11 @@ impl Optimizer {
         Optimizer::passes(vec![
             Box::new(PropConst),
             Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
+/*
             Box::new(PushSliceUp),
             Box::new(PushSplitDown),
-            Box::<ChangeAxes>::default(),
+*/
+//            Box::<ChangeAxes>::default(),
         ])
     }
 
@@ -60,7 +62,7 @@ impl Optimizer {
                 0,
             )),
             Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
-            Box::new(PushSplitDown),
+ //           Box::new(PushSplitDown),
             Box::new(OpOptim(
                 "fuse",
                 |op, _session, model, node| TypedOp::fuse(op, model, node),

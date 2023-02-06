@@ -1,7 +1,7 @@
 use super::lir_unary::{ConcreteMatMulGeometry, LirMatMulUnary, MatMulGeometry, ProtoFusedSpec};
 use super::*;
 use crate::internal::*;
-use crate::ops::array::TypedConcat;
+// use crate::ops::array::TypedConcat;
 use tract_ndarray::prelude::*;
 
 /// The pseudo Unary matrix multiplier. A is constant, B is the input
@@ -57,6 +57,7 @@ impl TypedOp for MatMulUnary {
         mir_unary_invariants(inputs[0], outputs[0], self.axes)
     }
 
+/*
     fn change_axes(
         &self,
         model: &TypedModel,
@@ -73,6 +74,7 @@ impl TypedOp for MatMulUnary {
             Ok(None)
         }
     }
+*/
 
 /*
     fn declutter(
@@ -227,7 +229,7 @@ impl MatMulUnary {
                     c_m_axis: self.axes.c_m,
                     c_n_axis: self.axes.c_n,
                     c_final_shape: c_shape.into(),
-                    reshape_post: vec![],
+//                    reshape_post: vec![],
                     mmm,
                 };
 		wire = patch.wire_node(
@@ -305,6 +307,7 @@ pub(super) fn mir_unary_invariants(
     Ok(axes)
 }
 
+/*
 #[allow(clippy::type_repetition_in_bounds, clippy::type_complexity)]
 pub(super) fn mir_unary_change_axes(
     model: &TypedModel,
@@ -344,3 +347,4 @@ pub(super) fn mir_unary_change_axes(
         Ok(None) // is it right ? or return error ?
     }
 }
+*/

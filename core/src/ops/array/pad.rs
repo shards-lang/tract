@@ -137,6 +137,7 @@ impl TypedOp for Pad {
         Ok(inv)
     }
 
+/*
     fn change_axes(
         &self,
         model: &TypedModel,
@@ -166,6 +167,7 @@ impl TypedOp for Pad {
         }
         Ok(None)
     }
+*/
 
     fn declutter(
         &self,

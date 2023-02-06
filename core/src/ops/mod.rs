@@ -7,16 +7,18 @@ use dyn_clone;
 
 #[macro_use]
 pub mod macros;
+/*
 #[macro_use]
 pub mod element_wise;
 #[macro_use]
 pub mod binary;
+*/
 
 pub mod invariants;
 
 pub mod array;
-pub mod cast;
-pub mod change_axes;
+// pub mod cast;
+// pub mod change_axes;
 pub mod cnn;
 // pub mod downsample;
 pub mod dummy;
@@ -183,6 +185,7 @@ pub trait TypedOp:
         Ok(tvec!())
     }
 
+/*
     #[allow(unused_variables)]
     fn suggested_axis_changes(&self) -> TractResult<TVec<(InOut, AxisOp)>> {
         Ok(tvec!())
@@ -198,6 +201,7 @@ pub trait TypedOp:
     ) -> TractResult<Option<AxisChangeConsequence>> {
         Ok(None)
     }
+*/
 
     #[allow(unused_variables)]
     #[allow(clippy::too_many_arguments)]

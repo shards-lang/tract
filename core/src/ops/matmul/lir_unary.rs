@@ -106,7 +106,7 @@ pub struct LirMatMulUnary {
     pub c_final_shape: ShapeFact,
     pub geometry: MatMulGeometry,
     pub mmm: Box<dyn MatMatMul>,
-    pub reshape_post: Vec<AxisOp>,
+//    pub reshape_post: Vec<AxisOp>,
 }
 
 impl DynHash for LirMatMulUnary {
@@ -304,6 +304,7 @@ impl TypedOp for LirMatMulUnary {
         ))
     }
 
+/*
     fn fuse(&self, model: &TypedModel, node: &TypedNode) -> TractResult<Option<TypedModelPatch>> {
         use crate::ops;
         if node.outputs.len() != 1
@@ -313,6 +314,7 @@ impl TypedOp for LirMatMulUnary {
             return Ok(None);
         }
         let succ = model.node(node.outputs[0].successors[0].node);
+/*
         if let Some(op) = succ.op_as::<ops::AxisOp>() {
             if op.only_shape() {
                 let mut reshape_post = self.reshape_post.clone();
@@ -330,7 +332,9 @@ impl TypedOp for LirMatMulUnary {
                 return Ok(Some(patch));
             }
         }
+*/
 
+/*
         if let Some(cast) = succ.op_as::<ops::cast::Cast>().map(|cast| cast.to) {
             if (cast.unquantized() == i8::datum_type() || cast.unquantized() == u8::datum_type())
                 && self.c_fact.datum_type == i32::datum_type()
@@ -358,6 +362,7 @@ impl TypedOp for LirMatMulUnary {
                 return Ok(Some(patch));
             }
         }
+*/
 
         if let Some(op) = succ.op_as::<ops::element_wise::ElementWiseOp>().map(|ew| ew.0.as_ref()) {
 /*
@@ -411,10 +416,12 @@ impl TypedOp for LirMatMulUnary {
         };
         Ok(None)
     }
+*/
 
     as_op!();
 }
 
+/*
 impl LirMatMulUnary {
     fn fuse_op(
         &self,
@@ -472,11 +479,13 @@ impl LirMatMulUnary {
             );
         }
         let mut other_shape = shape.to_owned();
+/*
         for axis_change in self.reshape_post.iter().rev() {
             if axis_change.recip().change_shape(&mut other_shape, true).is_err() {
                 return Ok(None);
             }
         }
+*/
         if other_shape[self.c_m_axis] == self.c_fact.shape[self.c_m_axis]
             && other_shape[self.c_m_axis] == other_shape.volume()
         {
@@ -500,3 +509,4 @@ impl LirMatMulUnary {
         Ok(None)
     }
 }
+*/

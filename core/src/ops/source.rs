@@ -52,6 +52,7 @@ impl TypedOp for TypedSource {
         Ok(tvec!(self.fact.clone()))
     }
 
+/*
     fn change_axes(
         &self,
         model: &TypedModel,
@@ -68,6 +69,7 @@ impl TypedOp for TypedSource {
             change,
         )))
     }
+*/
 
     fn concretize_dims(
         &self,
