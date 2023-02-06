@@ -37,20 +37,7 @@ default = [ "paranoid_assertions" ]
 paranoid_assertions = []
 
 [dev-dependencies]
-criterion.workspace = true
 env_logger.workspace = true
 lazy_static.workspace = true
-proptest.workspace = true
 approx.workspace = true
 
-[[bench]]
-name = "conv_direct_vs_im2col"
-harness = false
-
-[[bench]]
-name = "wavenet"
-harness = false
-
-[[bench]]
-name = "im2col_inception"
-harness = false

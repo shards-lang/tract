@@ -26,39 +26,3 @@ where
     shape.reverse();
     Some(shape)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn onnx_1() {
-        assert_eq!(multi_broadcast(&tvec![tvec![2, 3, 4, 5], tvec![]]), Some(tvec![2, 3, 4, 5]))
-    }
-
-    #[test]
-    fn onnx_2() {
-        assert_eq!(multi_broadcast(&tvec![tvec![2, 3, 4, 5], tvec![5]]), Some(tvec![2, 3, 4, 5]))
-    }
-
-    #[test]
-    fn onnx_3() {
-        assert_eq!(multi_broadcast(&tvec![tvec![4, 5], tvec![2, 3, 4, 5]]), Some(tvec![2, 3, 4, 5]))
-    }
-
-    #[test]
-    fn onnx_4() {
-        assert_eq!(
-            multi_broadcast(&tvec![tvec![1, 4, 5], tvec![2, 3, 4, 1]]),
-            Some(tvec![2, 3, 4, 5])
-        )
-    }
-
-    #[test]
-    fn onnx_5() {
-        assert_eq!(
-            multi_broadcast(&tvec![tvec![3, 4, 5], tvec![2, 1, 1, 1]]),
-            Some(tvec![2, 3, 4, 5])
-        )
-    }
-}

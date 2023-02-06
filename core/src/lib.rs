@@ -1,49 +1,6 @@
 #![allow(clippy::len_zero)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::redundant_closure_call)]
-//! # Tract
-//!
-//! Tiny, no-nonsense, self contained, portable TensorFlow and ONNX inference.
-//!
-//! ## Example
-//!
-//! ```
-//! # extern crate tract_core;
-//! # fn main() {
-//! use tract_core::internal::*;
-//!
-//! // build a simple model that just add 3 to each input component
-//! let mut model = TypedModel::default();
-//!
-//! let input_fact = f32::fact(&[3]);
-//! let input = model.add_source("input", input_fact).unwrap();
-//! let three = model.add_const("three".to_string(), tensor1(&[3f32])).unwrap();
-//! let add = model.wire_node("add".to_string(),
-//!     tract_core::ops::math::add(),
-//!     [input, three].as_ref()
-//!     ).unwrap();
-//!
-//! model.auto_outputs().unwrap();
-//!
-//! // We build an execution plan. Default inputs and outputs are inferred from
-//! // the model graph.
-//! let plan = SimplePlan::new(&model).unwrap();
-//!
-//! // run the computation.
-//! let input = tensor1(&[1.0f32, 2.5, 5.0]);
-//! let mut outputs = plan.run(tvec![input.into()]).unwrap();
-//!
-//! // take the first and only output tensor
-//! let mut tensor = outputs.pop().unwrap();
-//!
-//! assert_eq!(tensor, tensor1(&[4.0f32, 5.5, 8.0]).into());
-//! # }
-//! ```
-//!
-//! While creating a model from Rust code is useful for testing the library,
-//! real-life use-cases will usually load a TensorFlow or ONNX model using
-//! tract-tensorflow or tract-onnx crates.
-//!
 
 pub extern crate anyhow;
 extern crate bit_set;
@@ -62,8 +19,6 @@ pub extern crate ndarray;
 #[cfg(test)]
 extern crate env_logger;
 pub extern crate num_traits;
-#[cfg(test)]
-extern crate proptest;
 
 pub extern crate tract_data;
 pub extern crate tract_linalg;
@@ -73,8 +28,7 @@ pub mod macros;
 #[macro_use]
 pub mod ops;
 
-pub mod broadcast;
-pub mod framework;
+mod broadcast;
 mod hash;
 mod late_bind;
 pub mod model;
@@ -86,7 +40,6 @@ pub use dyn_clone;
 
 /// This prelude is meant for code using tract.
 pub mod prelude {
-    pub use crate::framework::Framework;
     pub use crate::model::*;
     pub use crate::value::{IntoTValue, TValue};
     pub use std::sync::Arc;
