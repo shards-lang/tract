@@ -8,12 +8,10 @@ use dyn_clone;
 #[macro_use]
 pub mod macros;
 
-pub mod cnn;
 pub mod dummy;
 pub mod identity;
 pub mod konst;
 pub mod matmul;
-pub mod nn;
 pub mod source;
 pub mod unimpl;
 
