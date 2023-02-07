@@ -38,7 +38,6 @@ pub mod internal {
     pub use crate::hash::{dyn_hash, DynHash};
     pub use crate::impl_dyn_hash;
     pub use crate::prelude::*;
-    pub use crate::tensor::view::TensorView;
     pub use crate::tensor::Approximation;
     pub use anyhow::{bail, ensure};
     pub use ndarray as tract_ndarray;

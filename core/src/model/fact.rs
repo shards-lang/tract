@@ -73,7 +73,7 @@ impl ShapeFact {
     #[inline]
     pub fn eval_to_isize(&self, values: &SymbolValues) -> TractResult<Cow<TVec<isize>>> {
         if let Some(c) = &self.concrete {
-            Ok(unsafe { std::mem::transmute(Cow::Borrowed(c)) })
+	    Ok(Cow::Owned(c.iter().map(|x| *x as isize).collect()))
         } else {
             Ok(Cow::Owned(
                 self.iter().map(|d| d.eval(values).to_isize()).collect::<TractResult<TVec<_>>>()?,

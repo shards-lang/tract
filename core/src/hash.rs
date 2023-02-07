@@ -8,7 +8,7 @@ pub trait SloppyHash {
 
 impl SloppyHash for tract_data::prelude::f16 {
     fn sloppy_hash<S: Hasher>(&self, state: &mut S) {
-        unsafe { std::mem::transmute_copy::<tract_data::prelude::f16, i16>(self).hash(state) }
+panic!()
     }
 }
 

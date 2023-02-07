@@ -145,39 +145,9 @@ impl TypedModel {
         session.optimize(self)
     }
 
-    pub fn concretize_dims(&self, values: &SymbolValues) -> TractResult<TypedModel> {
-        use crate::model::translator::Translate;
-        impl Translate<TypedFact, Box<dyn TypedOp>, TypedFact, Box<dyn TypedOp>> for SymbolValues {
-            fn translate_node(
-                &self,
-                source: &TypedModel,
-                node: &TypedNode,
-                target: &mut TypedModel,
-                mapping: &HashMap<OutletId, OutletId>,
-            ) -> TractResult<TVec<OutletId>> {
-                let outlets = node.op.concretize_dims(source, node, target, mapping, self)?;
-                for outlet in &outlets {
-                    target.outlet_fact(*outlet)?.consistent()?;
-                }
-                Ok(outlets)
-            }
-        }
-        values.translate_model(self)
-    }
-
     /// Translate the graph to locally optimized operators (LIR or MIR ops).
     pub fn optimize(&mut self) -> TractResult<()> {
         crate::optim::Optimizer::codegen().optimize(self)
     }
 }
 
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test() {
-        fn is_sync<T: Sync>() {}
-        is_sync::<TypedModel>();
-    }
-}

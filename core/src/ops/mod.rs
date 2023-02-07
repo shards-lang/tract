@@ -18,29 +18,10 @@ pub mod unimpl;
 use crate::internal::*;
 use crate::optim::OptimizerSession;
 
-pub trait OpState: fmt::Debug + dyn_clone::DynClone {
-    fn eval(
-        &mut self,
-        session: &mut SessionState,
-        op: &dyn Op,
-        inputs: TVec<TValue>,
-    ) -> TractResult<TVec<TValue>>;
-}
-dyn_clone::clone_trait_object!(OpState);
-
 pub trait EvalOp {
     #[allow(unused_variables)]
     fn eval(&self, inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
         bail!("stateless evaluation not implemented")
-    }
-
-    #[allow(unused_variables)]
-    fn state(
-        &self,
-        session: &mut SessionState,
-        node_id: usize,
-    ) -> TractResult<Option<Box<dyn OpState>>> {
-        Ok(None)
     }
 
     fn is_stateless(&self) -> bool;
@@ -92,49 +73,6 @@ pub trait TypedOp:
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
         Ok(None)
-    }
-
-    #[allow(unused_variables)]
-    #[allow(clippy::too_many_arguments)]
-    fn slice(
-        &self,
-        patch: &mut TypedModelPatch,
-        prefix: &str,
-        inputs: &[OutletId],
-        output_axis: usize,
-        start: usize,
-        end: usize,
-    ) -> TractResult<Option<TVec<OutletId>>> {
-        Ok(None)
-    }
-
-    /// Transforms the op in an equivalent one, operating on dt (i8 or u8).
-    ///
-    /// Returns None if the op can not be translated.
-    #[allow(unused_variables)]
-    fn quantize(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-        dt: DatumType,
-        scale: f32,
-        zero_point: i32,
-    ) -> TractResult<Option<Box<dyn TypedOp>>> {
-        Ok(None)
-    }
-
-    /// Transform the op into by providing a value to one or more symbols.
-    #[allow(unused_variables)]
-    fn concretize_dims(
-        &self,
-        source: &TypedModel,
-        node: &TypedNode,
-        target: &mut TypedModel,
-        mapping: &HashMap<OutletId, OutletId>,
-        values: &SymbolValues,
-    ) -> TractResult<TVec<OutletId>> {
-        let inputs = node.inputs.iter().map(|i| mapping[i]).collect::<TVec<_>>();
-        target.wire_node(&node.name, node.op.clone(), &inputs)
     }
 
     /// Translate the op into the most efficient form possible for execution.

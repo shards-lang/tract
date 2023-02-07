@@ -30,7 +30,6 @@ pub mod ops;
 
 mod broadcast;
 mod hash;
-mod late_bind;
 pub mod model;
 pub mod optim;
 pub mod plan;
@@ -54,9 +53,8 @@ pub mod prelude {
 /// This prelude is meant for code extending tract (like implementing new ops).
 pub mod internal {
     pub use crate::hash::{hash_f32, hash_opt_f32, SloppyHash};
-    pub use crate::late_bind::*;
     pub use crate::model::*;
-    pub use crate::ops::{ AttrOrInput, EvalOp, Op, OpState };
+    pub use crate::ops::{ AttrOrInput, EvalOp, Op };
     pub use crate::plan::SessionState;
     pub use crate::prelude::*;
     pub use anyhow::{anyhow, bail, ensure, format_err, Context as TractErrorContext};

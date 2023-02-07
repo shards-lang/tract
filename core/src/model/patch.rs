@@ -109,15 +109,6 @@ where
         Ok(id)
     }
 
-    pub unsafe fn shunt_outside_unchecked(
-        &mut self,
-        outlet: OutletId,
-        by: OutletId,
-    ) -> TractResult<()> {
-        self.shunt_outlet_by.insert(outlet, by);
-        Ok(())
-    }
-
     /// Replace an Outlet in the target model by one from the patch.
     pub fn shunt_outside(
         &mut self,
