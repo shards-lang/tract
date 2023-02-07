@@ -1,4 +1,4 @@
-use super::lir_unary::{ConcreteMatMulGeometry, LirMatMulUnary, MatMulGeometry, ProtoFusedSpec};
+use super::lir_unary::{LirMatMulUnary, ProtoFusedSpec};
 use super::*;
 use crate::internal::*;
 // use crate::ops::array::TypedConcat;
@@ -110,18 +110,7 @@ impl MatMulUnary {
                 mmm.a_pack().alignment(),
             )
             .unwrap();
-/*
-            mmm.a_pack().pack(
-                &mut pa.view_mut(),
-                TensorView::from_bytes(&self.a, offset, self.a.shape(), self.a.strides()),
-                self.axes.a_k,
-                self.axes.a_m,
-            );
-*/
-//            (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
             (pa.into_arc_tensor(), vec![
-//		ProtoFusedSpec::BinScalar(AttrOrInput::Attr(rctensor0(0.0f32)), tract_linalg::mmm::BinOp::Add),
-//		ProtoFusedSpec::Store,
 		ProtoFusedSpec::Store,
 	    ])
         });
@@ -141,71 +130,19 @@ impl MatMulUnary {
                 &[wire],
             )?[0];
             let b_storage = mmm.b_packed(b_dt.size_of(), k);
-            let geometry = ConcreteMatMulGeometry { m, k, n, b_storage };
 
                let op = LirMatMulUnary {
                     c_fact: c_dt.fact(&c_shape),
-                    geometry: MatMulGeometry::Concrete(geometry),
                     micro_ops: packed_as,
                     c_m_axis: self.axes.c_m,
                     c_n_axis: self.axes.c_n,
                     c_final_shape: c_shape.into(),
-//                    reshape_post: vec![],
-                    mmm,
                 };
-		wire = patch.wire_node(
-                format!("{}.matmatmul", &*node.name),
-op, &[wire])?[0];
-//	    dbg!("done wire_node");
-
- //           patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
- //           patch.obliterate(node.id)?;
+		wire = patch.wire_node( format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
         }
 
         Ok(patch)
     }
 
-/*
-    fn declutter_precusor_is_concat(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        if let Some(concat) = model.nodes()[node.inputs[0].node].op().downcast_ref::<TypedConcat>()
-        {
-            let mut patch = TypedModelPatch::new("split over k-concatenated input");
-            if concat.axis == self.axes.b_k {
-                let concat_node = model.node(node.inputs[0].node);
-                let offsets = concat
-                    .offsets(&model.node_input_facts(concat_node.id)?)?
-                    .iter()
-                    .map(|x| x.to_usize())
-                    .collect::<TractResult<Vec<usize>>>()?;
-                let mut wires = vec![];
-                for (ix, input) in concat_node.inputs.iter().enumerate() {
-                    let wire = patch.tap_model(model, *input)?;
-                    let a = self.a.slice(self.axes.a_k, offsets[ix], offsets[ix + 1])?;
-                    let wire = patch.wire_node(
-                        format!("{}.k-{}-{}", node.name, offsets[ix], offsets[ix + 1]),
-                        MatMulUnary { a: a.into_arc_tensor(), ..self.clone() },
-                        &[wire],
-                    )?[0];
-                    wires.push(wire)
-                }
-                let mut wire = wires[0];
-                for (ix, w) in wires[1..].iter().enumerate() {
-                    wire = patch.wire_node(
-                        format!("{}.k-add-{}", node.name, ix),
-                        crate::ops::binary::TypedBinOp(Box::new(crate::ops::math::Add)),
-                        &[wire, *w],
-                    )?[0];
-                }
-                patch.shunt_outside(model, OutletId::new(node.id, 0), wire)?;
-                return Ok(Some(patch));
-            }
-        }
-        Ok(None)
-    }
-*/
 }
 
