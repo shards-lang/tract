@@ -68,20 +68,3 @@ impl TypedOp for LirMatMulUnary {
 
     as_op!();
 }
-
-#[test]
-fn kali() {
-	let mut patch = TypedModel::default();
-	let mut wire = patch.add_source("x", f32::fact([1,1])).unwrap();
-
-	let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-	    let pa = Tensor::zero_aligned::<f32>(&[64], 32).unwrap();
-	    (pa.into_arc_tensor(), vec![ ProtoFusedSpec::Store, ])
-	});
-
-	wire = patch.wire_node("pack", super::MatMatMulPack { }, &[wire],).unwrap()[0];
-
-	let op = LirMatMulUnary { micro_ops: packed_as, };
-	wire = patch.wire_node("matmatmul", op, &[wire]).unwrap()[0];
-std::mem::drop(patch);
-}
