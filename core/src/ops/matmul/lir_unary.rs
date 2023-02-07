@@ -6,22 +6,14 @@ use tract_itertools::Itertools;
 pub enum BinOp {
     Min,
     Max,
-    Add,
-    Mul,
-    Sub,
-    SubF,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum OutputStoreSpec {
     View {
         m_axis: usize,
-        n_axis: usize,
-        mr: usize,
-        nr: usize,
     },
     Strides {
-        row_byte_stride: isize,
         col_byte_stride: isize,
         mr: usize,
         nr: usize,
@@ -75,12 +67,6 @@ panic!()
 
 impl TypedOp for LirMatMulUnary {
     fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-        ensure!(
-            self.micro_ops.ndim() == self.c_fact.rank(),
-            "Constant A array rank and C rank should be the same. (resp {} and {})",
-            self.micro_ops.ndim(),
-            self.c_fact.rank()
-        );
         let mut fact = self.c_fact.clone();
         fact.shape = self.c_final_shape.clone();
         Ok(tvec!(fact))
