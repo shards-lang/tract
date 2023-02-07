@@ -55,8 +55,7 @@ impl TypedOp for MatMulUnary {
     ) -> TractResult<Option<TypedModelPatch>> {
         let b = args_1!(model.node_input_facts(node.id)?);
         if let Some(b_shape) = b.shape.as_concrete() {
-            let patch = self.new_mat_mul_unary_finite(model, node, b_shape, b.datum_type)?;
-	    std::mem::drop(patch);
+            let patch = self.new_mat_mul_unary_finite(model, node)?;
 	    Ok(None)
         } else {
             Ok(None)
@@ -71,8 +70,6 @@ impl MatMulUnary {
         &self,
         model: &TypedModel,
         node: &TypedNode,
-        b_shape: &[usize],
-        b_dt: DatumType,
     ) -> TractResult<TypedModelPatch> {
         let mut patch = TypedModelPatch::default();
         let mut wire = patch.tap_model(model, node.inputs[0])?;
