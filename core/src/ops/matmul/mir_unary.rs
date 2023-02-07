@@ -77,49 +77,16 @@ impl MatMulUnary {
         let mut patch = TypedModelPatch::default();
         let mut wire = patch.tap_model(model, node.inputs[0])?;
 
-        let c_dt = output_type(self.a.datum_type());
-        let (m, k, n, c_shape) = compute_shape(self.a.shape(), b_shape, self.axes)?;
-
-        let mut a_iter_shape: TVec<usize> = self.a.shape().into();
-        a_iter_shape[self.axes.a_m] = 1;
-        a_iter_shape[self.axes.a_k] = 1;
-
-        let packed_as = Array::from_shape_fn(&*a_iter_shape, |a_prefix| unsafe {
-            let offset = a_prefix
-                .as_array_view()
-                .iter()
-                .zip(self.a.strides())
-                .map(|(x, s)| *x as isize * s)
-                .sum::<isize>()
-                * self.a.datum_type().size_of() as isize;
-            let mut pa = Tensor::zero_aligned_dt(
-                self.a.datum_type(),
-                &[64], //&[dbg!(mmm.a_pack().len(k, m))],
-                32 // dbg!(mmm.a_pack().alignment()),
-            )
-            .unwrap();
-            (pa.into_arc_tensor(), vec![
-		ProtoFusedSpec::Store,
-	    ])
+        let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
+            let pa = Tensor::zero_aligned::<f32>(&[64], 32).unwrap();
+            (pa.into_arc_tensor(), vec![ ProtoFusedSpec::Store, ])
         });
 
-            wire = patch.wire_node(
-                format!("{}.pack", &*node.name),
-                super::MatMatMulPack {
-                    k_axis: self.axes.b_k,
-                    mn_axis: self.axes.b_n,
-                },
-                &[wire],
-            )?[0];
+        wire = patch.wire_node(format!("{}.pack", &*node.name), super::MatMatMulPack { }, &[wire],)?[0];
 
-               let op = LirMatMulUnary {
-                    c_fact: c_dt.fact(&c_shape),
-                    micro_ops: packed_as,
-                    c_m_axis: self.axes.c_m,
-                    c_n_axis: self.axes.c_n,
-                    c_final_shape: c_shape.into(),
-                };
-		wire = patch.wire_node( format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
+       let op = LirMatMulUnary { micro_ops: packed_as, };
+	wire = patch.wire_node( format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
+
         Ok(patch)
     }
 

@@ -34,11 +34,7 @@ pub enum ProtoFusedSpec {
 
 #[derive(Clone, Debug, Hash)]
 pub struct LirMatMulUnary {
-    pub c_fact: TypedFact,
-    pub c_m_axis: usize,
-    pub c_n_axis: usize,
     pub micro_ops: ArrayD<(Arc<Tensor>, Vec<ProtoFusedSpec>)>,
-    pub c_final_shape: ShapeFact,
 }
 
 impl DynHash for LirMatMulUnary {
@@ -67,11 +63,25 @@ panic!()
 
 impl TypedOp for LirMatMulUnary {
     fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-        let mut fact = self.c_fact.clone();
-        fact.shape = self.c_final_shape.clone();
-        Ok(tvec!(fact))
+        Ok(tvec!(f32::fact([1,2])))
     }
 
     as_op!();
 }
 
+#[test]
+fn kali() {
+	let mut patch = TypedModel::default();
+	let mut wire = patch.add_source("x", f32::fact([1,1])).unwrap();
+
+	let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
+	    let pa = Tensor::zero_aligned::<f32>(&[64], 32).unwrap();
+	    (pa.into_arc_tensor(), vec![ ProtoFusedSpec::Store, ])
+	});
+
+	wire = patch.wire_node("pack", super::MatMatMulPack { }, &[wire],).unwrap()[0];
+
+	let op = LirMatMulUnary { micro_ops: packed_as, };
+	wire = patch.wire_node("matmatmul", op, &[wire]).unwrap()[0];
+std::mem::drop(patch);
+}

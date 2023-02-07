@@ -5,7 +5,6 @@ use crate::TVec;
 use half::f16;
 use itertools::Itertools;
 use ndarray::prelude::*;
-use num_complex::Complex;
 #[cfg(feature = "serialize")]
 use serde::ser::{Serialize, Serializer};
 use std::alloc;
@@ -89,12 +88,6 @@ impl Hash for Tensor {
                 QI8(_) => self.as_slice_unchecked::<i8>().hash(state),
                 QU8(_) => self.as_slice_unchecked::<u8>().hash(state),
                 QI32(_) => self.as_slice_unchecked::<i32>().hash(state),
-                ComplexI16 => self.as_slice_unchecked::<Complex<i16>>().hash(state),
-                ComplexI32 => self.as_slice_unchecked::<Complex<i32>>().hash(state),
-                ComplexI64 => self.as_slice_unchecked::<Complex<i64>>().hash(state),
-                ComplexF16 => self.as_slice_unchecked::<Complex<i16>>().hash(state),
-                ComplexF32 => self.as_slice_unchecked::<Complex<i32>>().hash(state),
-                ComplexF64 => self.as_slice_unchecked::<Complex<i64>>().hash(state),
             }
         }
     }
@@ -1350,29 +1343,6 @@ impl fmt::Debug for Tensor {
     }
 }
 
-pub fn reinterpret_inner_dim_as_complex(mut t: Tensor) -> anyhow::Result<Tensor> {
-    anyhow::ensure!(
-        t.shape().last() == Some(&2),
-        "The last dimension in the tensor shape {:?} must be 2",
-        t.shape()
-    );
-    unsafe {
-        t.shape.pop();
-        t.set_datum_type(t.datum_type().complexify()?);
-        t.update_strides_and_len();
-        Ok(t)
-    }
-}
-
-pub fn reinterpret_complex_as_inner_dim(mut t: Tensor) -> anyhow::Result<Tensor> {
-    unsafe {
-        t.shape.push(2);
-        t.set_datum_type(t.datum_type().decomplexify()?);
-        t.update_strides_and_len();
-        Ok(t)
-    }
-}
-
 pub fn natural_strides(shape: &[usize]) -> TVec<isize> {
     let mut strides = tvec!();
     compute_natural_stride_to(&mut strides, shape);
@@ -1561,30 +1531,4 @@ mod tests {
         PermuteAxisProblem { shape: vec![2, 2], permutation: vec![1, 0] }.check().unwrap();
     }
 
-    #[test]
-    fn test_reinterpret_inner_dim_as_complex() -> anyhow::Result<()> {
-        let input = crate::internal::tensor2(&[[1.0f32, 2.0], [3.0, 4.0], [5.0, 6.0]]);
-        let cplx_input = reinterpret_inner_dim_as_complex(input)?;
-        let expected = crate::internal::tensor1(&[
-            Complex::new(1.0f32, 2.0),
-            Complex::new(3.0, 4.0),
-            Complex::new(5.0, 6.0),
-        ]);
-        assert_eq!(expected, cplx_input);
-        Ok(())
-    }
-
-    #[test]
-    fn test_reinterpret_inner_dim_as_complex_2() -> anyhow::Result<()> {
-        let input =
-            crate::internal::tensor3(&[[[1i32, 2], [1, 2]], [[3, 4], [3, 4]], [[5, 6], [5, 6]]]);
-        let cplx_input = reinterpret_inner_dim_as_complex(input)?;
-        let expected = crate::internal::tensor2(&[
-            [Complex::new(1i32, 2), Complex::new(1, 2)],
-            [Complex::new(3, 4), Complex::new(3, 4)],
-            [Complex::new(5, 6), Complex::new(5, 6)],
-        ]);
-        assert_eq!(expected, cplx_input);
-        Ok(())
-    }
 }

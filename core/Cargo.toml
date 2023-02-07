@@ -38,5 +38,4 @@ paranoid_assertions = []
 [dev-dependencies]
 env_logger.workspace = true
 lazy_static.workspace = true
-approx.workspace = true
 

@@ -3,8 +3,6 @@ use ndarray::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatMatMulPack {
-    pub(crate) k_axis: usize,
-    pub(crate) mn_axis: usize,
 }
 
 impl DynHash for MatMatMulPack {
