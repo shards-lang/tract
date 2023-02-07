@@ -1,11 +1,8 @@
 use crate::internal::*;
 use ndarray::*;
 
-use tract_linalg::frame::Packer;
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MatMatMulPack {
-    pub(crate) packer: Packer,
     pub(crate) k_axis: usize,
     pub(crate) mn_axis: usize,
 }
@@ -34,38 +31,7 @@ impl EvalOp for MatMatMulPack {
     }
 
     fn eval(&self, mut inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
-        let b = args_1!(inputs);
-        let dt = b.datum_type();
-        unsafe {
-            let output_shape = self.output_shape(b.shape());
-            let mut packed =
-                Tensor::zero_aligned_dt(dt, &output_shape, self.packer.alignment())
-                    .unwrap();
-/*
-            let mut bc_shape: TVec<usize> = b.shape().into();
-            bc_shape[self.k_axis] = 1;
-            bc_shape[self.mn_axis] = 1;
-            for coord in indices(&*bc_shape) {
-                let offset = coord
-                    .as_array_view()
-                    .iter()
-                    .zip(b.strides())
-                    .map(|(x, s)| *x as isize * s)
-                    .sum::<isize>()
-                    * b.datum_type().size_of() as isize;
-                let mut prefix: TVec<usize> = coord.slice().into();
-                prefix.remove(self.k_axis.max(self.mn_axis));
-                prefix.remove(self.k_axis.min(self.mn_axis));
-                self.packer.pack(
-                    &mut packed.view_at_prefix_mut(&prefix)?,
-                    TensorView::from_bytes(&b, offset, b.shape(), b.strides()),
-                    self.k_axis,
-                    self.mn_axis,
-                )
-            }
-*/
-            Ok(tvec!(packed.into_tvalue()))
-        }
+panic!()
     }
 }
 
@@ -79,10 +45,6 @@ impl TypedOp for MatMatMulPack {
 
 impl MatMatMulPack {
     fn output_shape<D: DimLike>(&self, input: &[D]) -> TVec<D> {
-        let mut packed_shape: TVec<D> = input.into();
-        packed_shape.remove(self.mn_axis.max(self.k_axis));
-        packed_shape.remove(self.mn_axis.min(self.k_axis));
-        packed_shape.push(self.packer.len(input[self.k_axis].clone(), input[self.mn_axis].clone()));
-        packed_shape
+tvec!(1.into())
     }
 }

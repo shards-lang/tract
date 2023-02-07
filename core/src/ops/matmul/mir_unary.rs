@@ -27,8 +27,7 @@ impl EvalOp for MatMulUnary {
     }
 
     fn eval(&self, inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
-        let t = eval(&self.a, &inputs[0], self.axes)?;
-        Ok(tvec!(t.into()))
+        panic!()
     }
 }
 
@@ -81,17 +80,6 @@ impl MatMulUnary {
         let c_dt = output_type(self.a.datum_type());
         let (m, k, n, c_shape) = compute_shape(self.a.shape(), b_shape, self.axes)?;
 
-        let mmm = tract_linalg::ops()
-            .mmm(self.a.datum_type(), b_dt, c_dt, Some(m), Some(k), Some(n))
-            .with_context(|| {
-                format!(
-                    "No matrix multiplier for {:?}x{:?} to {:?}",
-                    self.a.datum_type(),
-                    b_dt,
-                    c_dt
-                )
-            })?;
-
         let mut a_iter_shape: TVec<usize> = self.a.shape().into();
         a_iter_shape[self.axes.a_m] = 1;
         a_iter_shape[self.axes.a_k] = 1;
@@ -106,8 +94,8 @@ impl MatMulUnary {
                 * self.a.datum_type().size_of() as isize;
             let mut pa = Tensor::zero_aligned_dt(
                 self.a.datum_type(),
-                &[mmm.a_pack().len(k, m)],
-                mmm.a_pack().alignment(),
+                &[64], //&[dbg!(mmm.a_pack().len(k, m))],
+                32 // dbg!(mmm.a_pack().alignment()),
             )
             .unwrap();
             (pa.into_arc_tensor(), vec![
@@ -115,21 +103,14 @@ impl MatMulUnary {
 	    ])
         });
 
-        unsafe {
-            let mut packed_b_shape: TVec<usize> = b_shape.into();
-            packed_b_shape.remove(self.axes.b_k.max(self.axes.b_n));
-            packed_b_shape.remove(self.axes.b_k.min(self.axes.b_n));
-            packed_b_shape.push(mmm.b_pack().len(k, n));
             wire = patch.wire_node(
                 format!("{}.pack", &*node.name),
                 super::MatMatMulPack {
-                    packer: mmm.b_pack(),
                     k_axis: self.axes.b_k,
                     mn_axis: self.axes.b_n,
                 },
                 &[wire],
             )?[0];
-            let b_storage = mmm.b_packed(b_dt.size_of(), k);
 
                let op = LirMatMulUnary {
                     c_fact: c_dt.fact(&c_shape),
@@ -139,8 +120,6 @@ impl MatMulUnary {
                     c_final_shape: c_shape.into(),
                 };
 		wire = patch.wire_node( format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
-        }
-
         Ok(patch)
     }
 

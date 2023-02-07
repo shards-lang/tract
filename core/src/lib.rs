@@ -21,7 +21,7 @@ extern crate env_logger;
 pub extern crate num_traits;
 
 pub extern crate tract_data;
-pub extern crate tract_linalg;
+// pub extern crate tract_linalg;
 
 #[macro_use]
 pub mod macros;
@@ -48,7 +48,7 @@ pub mod prelude {
     pub use ndarray as tract_ndarray;
     pub use num_traits as tract_num_traits;
     pub use tract_data;
-    pub use tract_linalg;
+//    pub use tract_linalg;
 }
 
 /// This prelude is meant for code extending tract (like implementing new ops).

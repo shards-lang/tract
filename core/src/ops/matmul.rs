@@ -1,22 +1,13 @@
 pub mod lir_unary;
 pub mod mir;
-// pub mod mir_quant;
-// pub mod mir_quant_unary;
 pub mod mir_unary;
 pub mod pack;
 
-/*
-#[cfg(test)]
-mod change_axis_test;
-*/
-
 use crate::internal::*;
 use tract_itertools::Itertools;
-use tract_linalg::mmm::FusedSpec;
 use tract_ndarray::prelude::*;
 
 pub use self::mir::MatMul;
-// pub use self::mir_quant::{MatMulQParams, QMatMul};
 pub use self::mir_unary::MatMulUnary;
 use self::pack::MatMatMulPack;
 
@@ -147,106 +138,3 @@ pub fn output_type(input: DatumType) -> DatumType {
     }
 }
 
-pub(super) fn eval(a: &Tensor, b: &Tensor, axes: MatMulAxes) -> TractResult<Tensor> {
-    unsafe {
-        let (m, k, n, c_shape) = compute_shape(a.shape(), b.shape(), axes)?;
-        let c_dt = output_type(a.datum_type());
-        let mm = tract_linalg::ops()
-            .mmm(a.datum_type(), b.datum_type(), c_dt, Some(m), Some(k), Some(n))
-            .with_context(|| {
-                format!(
-                    "No matrix multiplier for {:?}x{:?} to {:?}",
-                    a.datum_type(),
-                    b.datum_type(),
-                    c_dt
-                )
-            })?;
-        let c_storage = mm.c_view(axes.c_m, axes.c_n);
-        let c = Tensor::uninitialized_dt(c_dt, &c_shape)?;
-
-        let a_pack = mm.a_pack();
-        let b_pack = mm.b_pack();
-
-        let mut packed_a = Tensor::uninitialized_aligned_dt(
-            a.datum_type(),
-            &[a_pack.len(k, m)],
-            a_pack.alignment(),
-        )?;
-        let mut packed_b = Tensor::uninitialized_aligned_dt(
-            b.datum_type(),
-            &[b_pack.len(k, n)],
-            b_pack.alignment(),
-        )?;
-
-        // FIXME: what does it look with putting m and n in C at 1 instead of removing ?
-
-        let mut a_bc_shape: TVec<usize> = a.shape().into();
-        a_bc_shape.remove(axes.a_m.max(axes.a_k));
-        a_bc_shape.remove(axes.a_m.min(axes.a_k));
-
-        let mut b_bc_shape: TVec<usize> = b.shape().into();
-        b_bc_shape.remove(axes.b_n.max(axes.b_k));
-        b_bc_shape.remove(axes.b_n.min(axes.b_k));
-
-        let mut a_strides: TVec<isize> = a.strides().into();
-        a_strides.remove(axes.a_m.max(axes.a_k));
-        a_strides.remove(axes.a_m.min(axes.a_k));
-
-        let mut b_strides: TVec<isize> = b.strides().into();
-        b_strides.remove(axes.b_n.max(axes.b_k));
-        b_strides.remove(axes.b_n.min(axes.b_k));
-
-        let mut c_bc_shape = c_shape;
-        c_bc_shape.remove(axes.c_m.max(axes.c_n));
-        c_bc_shape.remove(axes.c_m.min(axes.c_n));
-
-        let mut c_strides: TVec<isize> = c.strides().into();
-        c_strides.remove(axes.c_m.max(axes.c_n));
-        c_strides.remove(axes.c_m.min(axes.c_n));
-
-        for prefix in tract_ndarray::indices(&*c_bc_shape).into_iter() {
-            let mut a_offset = 0;
-            let mut b_offset = 0;
-            let mut c_offset = 0;
-            for (axis, &dim) in prefix.slice().iter().enumerate() {
-                if a_bc_shape[axis] > 1 {
-                    a_offset += a_strides[axis] * dim as isize * a.datum_type().size_of() as isize;
-                }
-                if b_bc_shape[axis] > 1 {
-                    b_offset += b_strides[axis] * dim as isize * b.datum_type().size_of() as isize;
-                }
-                c_offset += c_strides[axis] * dim as isize * c_dt.size_of() as isize;
-            }
-            a_pack.pack(
-                packed_a.view_mut(),
-                TensorView::from_bytes(a, a_offset, a.shape(), a.strides()),
-                axes.a_k,
-                axes.a_m,
-            );
-            b_pack.pack(
-                packed_b.view_mut(),
-                TensorView::from_bytes(b, b_offset, b.shape(), b.strides()),
-                axes.b_k,
-                axes.b_n,
-            );
-            mm.run(
-                m,
-                n,
-                &[
-                    FusedSpec::AddMatMul {
-                        a: mm.a_packed(a.datum_type().size_of(), k).wrap(&packed_a.view()),
-                        b: mm.b_packed(b.datum_type().size_of(), k).wrap(&packed_b.view())?,
-                        k,
-                    },
-                    FusedSpec::Store(c_storage.wrap(&TensorView::from_bytes(
-                        &c,
-                        c_offset,
-                        c.shape(),
-                        c.strides(),
-                    ))),
-                ],
-            )?;
-        }
-        Ok(c)
-    }
-}

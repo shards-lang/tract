@@ -2,10 +2,33 @@ use crate::internal::*;
 use ndarray::*;
 use tract_itertools::Itertools;
 
-use tract_linalg::mmm::{
-    BinOp, FusedSpec, InputStoreSpec, MatMatMul, OutputStore, OutputStoreSpec, ScratchSpace,
-};
-use tract_linalg::Scaler;
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BinOp {
+    Min,
+    Max,
+    Add,
+    Mul,
+    Sub,
+    SubF,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum OutputStoreSpec {
+    View {
+        m_axis: usize,
+        n_axis: usize,
+        mr: usize,
+        nr: usize,
+    },
+    Strides {
+        row_byte_stride: isize,
+        col_byte_stride: isize,
+        mr: usize,
+        nr: usize,
+        m: usize,
+        n: usize,
+    },
+}
 
 #[derive(PartialEq, Eq, Clone, Hash, Debug)]
 pub enum ProtoFusedSpec {
@@ -14,48 +37,7 @@ pub enum ProtoFusedSpec {
     BinPerCol(AttrOrInput, BinOp),
     AddRowColProducts(AttrOrInput, AttrOrInput),
     AddUnicast(OutputStoreSpec, AttrOrInput),
-    Scaler(Scaler),
     Store,
-}
-
-impl ProtoFusedSpec {
-    pub fn name(&self) -> String {
-        use ProtoFusedSpec::*;
-        match self {
-            BinScalar(_, op) => format!("scalar {op:?}"),
-            BinPerRow(_, op) => format!("row {op:?}"),
-            BinPerCol(_, op) => format!("col {op:?}"),
-            AddRowColProducts(_, _) => "add row*col product".to_string(),
-            AddUnicast(_, _) => "add to matrix".to_string(),
-            Scaler(s) => format!("scale by {}", 1f32 * *s),
-            Store => "Store".to_string(),
-        }
-    }
-
-    pub fn resolve<'t>(
-        &'t self,
-        inputs: &'t [TValue],
-        prefix: &[usize],
-        output: OutputStore,
-    ) -> FusedSpec<'t> {
-        match self {
-            ProtoFusedSpec::BinScalar(v, op) => FusedSpec::BinScalar(v.tensor(inputs), *op),
-            ProtoFusedSpec::BinPerRow(v, op) => FusedSpec::BinPerRow(v.tensor(inputs), *op),
-            ProtoFusedSpec::BinPerCol(v, op) => FusedSpec::BinPerCol(v.tensor(inputs), *op),
-            ProtoFusedSpec::AddRowColProducts(row, col) => {
-                FusedSpec::AddRowColProducts(row.tensor(inputs), col.tensor(inputs))
-            }
-            ProtoFusedSpec::AddUnicast(store, v) => unsafe {
-                let mut view = v.tensor(inputs).view();
-                for (ix, &dim) in prefix.iter().enumerate() {
-                    view.offset_axis_unchecked(ix, dim as isize);
-                }
-                FusedSpec::AddUnicast(store.wrap(&view))
-            },
-            ProtoFusedSpec::Scaler(scaler) => scaler.as_fused_spec(),
-            ProtoFusedSpec::Store => FusedSpec::Store(output),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Hash)]
