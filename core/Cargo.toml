@@ -15,26 +15,9 @@ rust-version = "1.65"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-bit-set.workspace = true
-derive-new.workspace = true
 downcast-rs.workspace = true
 dyn-clone.workspace = true
 educe.workspace = true
-lazy_static.workspace = true
 log.workspace = true
-maplit.workspace = true
 ndarray.workspace = true
-num-integer.workspace = true
-num-traits.workspace = true
-smallvec.workspace = true
-# tract-linalg = { version = "=0.19.3-pre", path = "../linalg" }
 tract-data = { version = "=0.19.3-pre", path = "../data" }
-
-[features]
-default = [ "paranoid_assertions" ]
-paranoid_assertions = []
-
-[dev-dependencies]
-env_logger.workspace = true
-lazy_static.workspace = true
-

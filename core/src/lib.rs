@@ -2,8 +2,6 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::redundant_closure_call)]
 #[macro_use]
-extern crate derive_new;
-#[macro_use]
 pub extern crate downcast_rs;
 #[macro_use]
 extern crate educe;
@@ -49,12 +47,9 @@ pub mod ops {
     }
     pub mod dummy {
         use crate::internal::*;
-        #[derive(Debug, Clone, new, Hash)]
+        #[derive(Debug, Clone, Default, Hash)]
         pub struct Dummy;
         impl Op for Dummy {
-            fn name(&self) -> Cow<str> {
-                unimplemented!()
-            }
             op_as_typed_op!();
         }
         impl_dyn_hash!(Dummy);
@@ -72,13 +67,10 @@ pub mod ops {
     }
     pub mod konst {
         use crate::internal::*;
-        #[derive(Debug, Clone, new, Hash)]
+        #[derive(Debug, Clone, Hash)]
         pub struct Const(pub Arc<Tensor>);
         impl_dyn_hash!(Const);
         impl Op for Const {
-            fn name(&self) -> Cow<str> {
-                unimplemented!()
-            }
             op_as_typed_op!();
         }
         impl EvalOp for Const {
@@ -134,9 +126,6 @@ pub mod ops {
                 }
             }
             impl Op for LirMatMulUnary {
-                fn name(&self) -> Cow<str> {
-                    unimplemented!()
-                }
                 op_as_typed_op!();
             }
             impl EvalOp for LirMatMulUnary {
@@ -159,9 +148,6 @@ pub mod ops {
             }
             impl_dyn_hash!(MatMul);
             impl Op for MatMul {
-                fn name(&self) -> Cow<str> {
-                    "MatMul".into()
-                }
                 op_as_typed_op!();
             }
             impl EvalOp for MatMul {
@@ -204,7 +190,7 @@ pub mod ops {
                         model,
                         node,
                         &node.inputs[var_ix..][..1],
-                        MatMulUnary::new(konst, axes),
+                        MatMulUnary { a: konst, axes },
                     )
                     .map(Some)
                 }
@@ -215,16 +201,13 @@ pub mod ops {
             use super::lir_unary::{LirMatMulUnary, ProtoFusedSpec};
             use super::*;
             use tract_ndarray::prelude::*;
-            #[derive(Debug, Clone, new, Hash)]
+            #[derive(Debug, Clone, Hash)]
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
                 pub axes: MatMulAxes,
             }
             impl_dyn_hash!(MatMulUnary);
             impl Op for MatMulUnary {
-                fn name(&self) -> Cow<str> {
-                    unimplemented!()
-                }
                 op_as_typed_op!();
             }
             impl EvalOp for MatMulUnary {
@@ -303,9 +286,6 @@ pub mod ops {
                 }
             }
             impl Op for MatMatMulPack {
-                fn name(&self) -> Cow<str> {
-                    unimplemented!()
-                }
                 op_as_typed_op!();
             }
             impl EvalOp for MatMatMulPack {
@@ -438,15 +418,12 @@ pub mod ops {
     }
     pub mod source {
         use crate::internal::*;
-        #[derive(Debug, Clone, new, Hash)]
+        #[derive(Debug, Clone, Hash)]
         pub struct TypedSource {
             pub fact: TypedFact,
         }
         impl_dyn_hash!(TypedSource);
         impl Op for TypedSource {
-            fn name(&self) -> Cow<str> {
-                unimplemented!()
-            }
             op_as_typed_op!();
         }
         impl EvalOp for TypedSource {
@@ -473,7 +450,6 @@ pub mod ops {
     pub trait Op:
         fmt::Debug + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
     {
-        fn name(&self) -> Cow<str>;
         fn same_as(&self, _other: &dyn Op) -> bool {
             false
         }
@@ -539,7 +515,7 @@ pub mod ops {
     }
     impl std::fmt::Display for Box<dyn TypedOp> {
         fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-            write!(fmt, "{}", self.name())
+            write!(fmt, "foo")
         }
     }
     #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -979,7 +955,7 @@ pub mod model {
                         let prec = &self.nodes[input.node];
                         if !prec.outputs[input.slot]
                             .successors
-                            .contains(&InletId::new(node.id, ix))
+                            .contains(&InletId { node: node.id, slot: ix })
                         {
                             unimplemented!()
                         }
@@ -1019,7 +995,7 @@ pub mod model {
                 let v = v.into_arc_tensor();
                 let fact = F::from(v.clone());
                 let name = name.into();
-                self.add_node(name, crate::ops::konst::Const::new(v), tvec!(fact))
+                self.add_node(name, crate::ops::konst::Const(v), tvec!(fact))
                     .map(|id| id.into())
             }
         }
@@ -1119,11 +1095,16 @@ pub mod model {
                 unimplemented!()
             }
         }
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, new)]
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub struct OutletId {
             pub node: usize,
             pub slot: usize,
         }
+	impl OutletId {
+	    pub fn new(node: usize, slot: usize) -> OutletId {
+                OutletId { node, slot }
+            }
+	}
         impl fmt::Debug for OutletId {
             fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
                 unimplemented!()
@@ -1139,7 +1120,7 @@ pub mod model {
                 OutletId::new(pair.0, pair.1)
             }
         }
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, new, Ord, PartialOrd)]
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
         pub struct InletId {
             pub node: usize,
             pub slot: usize,
@@ -1175,14 +1156,14 @@ pub mod model {
             F: Fact + Hash + Clone + 'static,
             O: Debug + Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
-            let mut done = bit_set::BitSet::with_capacity(nodes.len());
+            let mut done = std::collections::HashSet::new();
             let mut order: Vec<usize> = vec![];
             for &model_target in model_outputs {
-                if done.contains(model_target) {
+                if done.contains(&model_target) {
                     unimplemented!()
                 }
                 let mut current_stack: Vec<(usize, usize)> = vec![(model_target, 0)];
-                let mut pending = bit_set::BitSet::with_capacity(nodes.len());
+                let mut pending = std::collections::HashSet::new();
                 while let Some((current_node, current_input)) = current_stack.pop() {
                     let deps_from_inputs = nodes[current_node].inputs.len();
                     let all_deps_count = deps_from_inputs
@@ -1193,7 +1174,7 @@ pub mod model {
                     if model_inputs.contains(&current_node) || current_input == all_deps_count {
                         order.push(current_node);
                         done.insert(current_node);
-                        pending.remove(current_node);
+                        pending.remove(&current_node);
                     } else {
                         let precursor: usize = nodes[current_node]
                             .inputs
@@ -1215,9 +1196,9 @@ pub mod model {
                             )
                             .nth(current_input)
                             .unwrap();
-                        if done.contains(precursor) {
+                        if done.contains(&precursor) {
                             current_stack.push((current_node, current_input + 1));
-                        } else if pending.contains(precursor) {
+                        } else if pending.contains(&precursor) {
                             unimplemented!()
                         } else {
                             pending.insert(precursor);
@@ -1421,7 +1402,7 @@ pub mod model {
                 debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
                 for (node, inputs) in all_inputs {
                     for (ix, input) in inputs.into_iter().enumerate() {
-                        target.add_edge(mapping[&input], InletId::new(node, ix))?;
+                        target.add_edge(mapping[&input], InletId { node, slot: ix})?;
                     }
                 }
                 debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
@@ -1546,7 +1527,7 @@ pub mod model {
                         .collect::<TractResult<TVec<_>>>()?;
                     let new_id = target.add_node(node.name.clone(), new_op, facts)?;
                     for (ix, o) in node.inputs.iter().enumerate() {
-                        target.add_edge(mapping[o], InletId::new(new_id, ix))?
+                        target.add_edge(mapping[o], InletId { node: new_id, slot: ix })?
                     }
                     Ok(node
                         .outputs
@@ -1571,10 +1552,10 @@ pub mod model {
                     .is_some()
             }
             fn create_dummy(&self) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::dummy::Dummy::new())
+                Box::new(crate::ops::dummy::Dummy::default())
             }
             fn create_source(&self, fact: TypedFact) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::source::TypedSource::new(fact))
+                Box::new(crate::ops::source::TypedSource { fact })
             }
             fn wire_node(
                 &mut self,
@@ -1602,7 +1583,7 @@ pub mod model {
                     inputs
                         .iter()
                         .enumerate()
-                        .try_for_each(|(ix, i)| self.add_edge(*i, InletId::new(id, ix)))?;
+                        .try_for_each(|(ix, i)| self.add_edge(*i, InletId { node: id, slot:ix }))?;
                     TractResult::Ok(
                         self.node(id)
                             .outputs
