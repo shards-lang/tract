@@ -4,42 +4,17 @@ use std::fmt;
 use ndarray::*;
 use std::alloc;
 pub fn tensor0(x: f32) -> Tensor {
-	Tensor { shape: vec!(), strides: vec!(), data: vec!(x) }
+	Tensor { shape: vec!(), data: vec!(x) }
 }
 pub struct Tensor {
     shape: Vec<usize>,
-    strides: Vec<isize>,
     data: Vec<f32>,
 }
 impl Tensor {
-    pub fn uninitialized(shape: &[usize]) -> anyhow::Result<Tensor> {
-        Self::uninitialized_aligned(shape, 4)
-    }
-    pub fn uninitialized_aligned(
-        shape: &[usize],
-        alignment: usize,
-    ) -> anyhow::Result<Tensor> {
-	let data = vec!(0.0f32; shape.iter().cloned().product::<usize>());
-        let mut tensor = Tensor { strides: vec![], shape: shape.into(), data };
-        tensor.update_strides_and_len();
-        Ok(tensor)
-    }
-    pub fn clear(&mut self) -> anyhow::Result<()> {
-        self.fill(0.0)
-    }
     pub fn zero(shape: &[usize]) -> anyhow::Result<Tensor> {
-            let mut t = Tensor::uninitialized(shape)?;
-            t.clear()?;
-            Ok(t)
-    }
-    pub fn fill(&mut self, value: f32) -> anyhow::Result<()> {
-        self.as_slice_mut()?.iter_mut().for_each(|item| *item = value.clone());
-        Ok(())
-    }
-    pub fn zero_aligned(shape: &[usize], alignment: usize) -> anyhow::Result<Tensor> {
-            let mut tensor = Self::uninitialized_aligned(shape, alignment)?;
-            tensor.clear()?;
-            Ok(tensor)
+	let data = vec!(0.0f32; shape.iter().cloned().product::<usize>());
+        let mut tensor = Tensor { shape: shape.into(), data };
+        Ok(tensor)
     }
     #[inline]
     pub fn rank(&self) -> usize {
@@ -53,16 +28,6 @@ impl Tensor {
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         self.data.len()
-    }
-    fn update_strides_and_len(&mut self) {
-        self.strides.clear();
-        compute_natural_stride_to(&mut self.strides, &self.shape);
-    }
-    pub fn as_ptr(&self) -> anyhow::Result<*const f32> {
-        Ok(self.data.as_ptr())
-    }
-    pub fn as_ptr_mut(&mut self) -> anyhow::Result<*mut f32> {
-        self.as_ptr().map(|p| p as *mut f32)
     }
     pub fn as_slice_mut(&mut self) -> anyhow::Result<&mut [f32]> {
         Ok(&mut self.data)
@@ -85,47 +50,16 @@ impl Tensor {
         tensor0(v)
     }
     pub fn as_uniform(&self) -> Option<Tensor> {
-        if self.len() >= 1 && self.is_uniform() {
                 let mut t = Tensor::as_uniform_t(self);
                 Some(t)
-        } else {
-            unimplemented!()
-        }
+    }
+    fn into_arc_tensor(self) -> Arc<Tensor> {
+        Arc::new(self)
     }
 }
 impl PartialEq for Tensor {
     fn eq(&self, _other: &Tensor) -> bool {
         unimplemented!()
-    }
-}
-fn compute_natural_stride_to(strides: &mut Vec<isize>, shape: &[usize]) {
-    match shape.len() {
-        0 => (),
-        1 => strides.push(1),
-        2 => strides.extend_from_slice(&[shape[1] as isize, 1]),
-        3 => strides.extend_from_slice(&[(shape[1] * shape[2]) as isize, shape[2] as _, 1]),
-        4 => strides.extend_from_slice(&[
-            (shape[1] * shape[2] * shape[3]) as isize,
-            (shape[2] * shape[3]) as _,
-            shape[3] as _,
-            1,
-        ]),
-        _ => {
-            unimplemented!()
-        }
-    }
-}
-pub trait IntoArcTensor: Sized {
-    fn into_arc_tensor(self) -> Arc<Tensor>;
-}
-impl IntoArcTensor for Tensor {
-    fn into_arc_tensor(self) -> Arc<Tensor> {
-        Arc::new(self)
-    }
-}
-impl IntoArcTensor for Arc<Tensor> {
-    fn into_arc_tensor(self) -> Arc<Tensor> {
-        self
     }
 }
 #[macro_use]
@@ -240,7 +174,7 @@ impl MatMulUnary {
         let mut patch = TypedModelPatch::default();
         let mut wire = patch.tap_model(model, node.inputs[0])?;
         let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            let pa = Tensor::zero_aligned(&[64], 32).unwrap();
+            let pa = Tensor::zero(&[64]).unwrap();
             (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
         });
         wire = patch.wire_node(format!("{}.pack", &*node.name), MatMatMulPack {}, &[wire])?[0];
@@ -531,9 +465,8 @@ where
     pub fn add_const(
         &mut self,
         name: impl Into<String>,
-        v: impl IntoArcTensor,
+        v: Arc<Tensor>,
     ) -> TractResult<OutletId> {
-        let v = v.into_arc_tensor();
         let fact = F::from(v.clone());
         let name = name.into();
         self.add_node(name, Const(v), vec![fact]).map(|id| id.into())
