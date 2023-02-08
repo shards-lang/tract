@@ -1,10 +1,11 @@
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
-use std::fmt;
 use ndarray::*;
-use std::alloc;
 pub fn tensor0(x: f32) -> Tensor {
-	Tensor { shape: vec!(), data: vec!(x) }
+    Tensor {
+        shape: vec![],
+        data: vec![x],
+    }
 }
 pub struct Tensor {
     shape: Vec<usize>,
@@ -12,13 +13,12 @@ pub struct Tensor {
 }
 impl Tensor {
     pub fn zero(shape: &[usize]) -> anyhow::Result<Tensor> {
-	let data = vec!(0.0f32; shape.iter().cloned().product::<usize>());
-        let mut tensor = Tensor { shape: shape.into(), data };
+        let data = vec![0.0f32; shape.iter().cloned().product::<usize>()];
+        let mut tensor = Tensor {
+            shape: shape.into(),
+            data,
+        };
         Ok(tensor)
-    }
-    #[inline]
-    pub fn rank(&self) -> usize {
-        self.shape.len()
     }
     #[inline]
     pub fn shape(&self) -> &[usize] {
@@ -27,31 +27,21 @@ impl Tensor {
     #[inline]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.data.len()
-    }
-    pub fn as_slice_mut(&mut self) -> anyhow::Result<&mut [f32]> {
-        Ok(&mut self.data)
+        unimplemented!()
     }
     pub fn as_slice_unchecked(&self) -> &[f32] {
         &self.data
     }
     fn is_uniform_t(&self) -> bool {
-        let slice = self.as_slice_unchecked();
-        slice[1..].iter().all(|x| x == &slice[0])
-    }
-    pub fn is_uniform(&self) -> bool {
-        if self.len() <= 1 {
-            unimplemented!()
-        }
-        Tensor::is_uniform_t(self)
+        unimplemented!()
     }
     fn as_uniform_t(&self) -> Tensor {
         let v = self.as_slice_unchecked()[0].clone();
         tensor0(v)
     }
     pub fn as_uniform(&self) -> Option<Tensor> {
-                let mut t = Tensor::as_uniform_t(self);
-                Some(t)
+        let mut t = Tensor::as_uniform_t(self);
+        Some(t)
     }
     fn into_arc_tensor(self) -> Arc<Tensor> {
         Arc::new(self)
@@ -98,8 +88,16 @@ pub enum BinOp {
 }
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub enum OutputStoreSpec {
-    View { m_axis: usize },
-    Strides { col_byte_stride: isize, mr: usize, nr: usize, m: usize, n: usize },
+    View {
+        m_axis: usize,
+    },
+    Strides {
+        col_byte_stride: isize,
+        mr: usize,
+        nr: usize,
+        m: usize,
+        n: usize,
+    },
 }
 #[derive(PartialEq, Clone)]
 pub enum ProtoFusedSpec {
@@ -178,7 +176,9 @@ impl MatMulUnary {
             (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
         });
         wire = patch.wire_node(format!("{}.pack", &*node.name), MatMatMulPack {}, &[wire])?[0];
-        let op = LirMatMulUnary { micro_ops: packed_as };
+        let op = LirMatMulUnary {
+            micro_ops: packed_as,
+        };
         patch.wire_node(format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
         Ok(patch)
     }
@@ -293,7 +293,10 @@ impl ShapeFact {
         self.concrete = Some(self.dims.clone())
     }
     pub fn from_dims<T: IntoIterator<Item = usize>>(it: T) -> ShapeFact {
-        let mut dims = ShapeFact { dims: it.into_iter().collect(), concrete: None };
+        let mut dims = ShapeFact {
+            dims: it.into_iter().collect(),
+            concrete: None,
+        };
         dims.compute_concrete();
         dims
     }
@@ -316,17 +319,15 @@ pub struct TypedFact {
     pub uniform: Option<Arc<Tensor>>,
 }
 impl TypedFact {
-    pub fn shape<S>(shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>,
-    {
-        Self::dt_shape(shape)
-    }
     pub fn dt_shape<S>(shape: S) -> TypedFact
     where
         S: Into<ShapeFact>,
     {
-        TypedFact { shape: shape.into(), konst: None, uniform: None }
+        TypedFact {
+            shape: shape.into(),
+            konst: None,
+            uniform: None,
+        }
     }
 }
 impl From<Arc<Tensor>> for TypedFact {
@@ -345,9 +346,9 @@ impl<'a> From<&'a TypedFact> for TypedFact {
 }
 fn fact<S>(shape: S) -> TypedFact
 where
-S: Into<ShapeFact>,
+    S: Into<ShapeFact>,
 {
-TypedFact::dt_shape(shape)
+    TypedFact::dt_shape(shape)
 }
 pub trait SpecialOps<F, O> {
     fn create_dummy(&self) -> O;
@@ -377,7 +378,12 @@ where
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     fn default() -> Graph<F, O> {
-        Graph { nodes: vec![], inputs: vec![], outputs: vec![], outlet_labels: HashMap::new() }
+        Graph {
+            nodes: vec![],
+            inputs: vec![],
+            outputs: vec![],
+            outlet_labels: HashMap::new(),
+        }
     }
 }
 impl<F, O> Graph<F, O>
@@ -408,9 +414,20 @@ where
         let op = op.into();
         let name = name.into();
         let id = self.nodes.len();
-        let outputs =
-            output_facts.into_iter().map(|fact| Outlet { fact, successors: vec![] }).collect();
-        let node = Node { id, name, op, inputs: vec![], outputs };
+        let outputs = output_facts
+            .into_iter()
+            .map(|fact| Outlet {
+                fact,
+                successors: vec![],
+            })
+            .collect();
+        let node = Node {
+            id,
+            name,
+            op,
+            inputs: vec![],
+            outputs,
+        };
         self.nodes.push(node);
         Ok(id)
     }
@@ -462,14 +479,11 @@ where
     F: Clone + 'static + From<std::sync::Arc<Tensor>>,
     O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    pub fn add_const(
-        &mut self,
-        name: impl Into<String>,
-        v: Arc<Tensor>,
-    ) -> TractResult<OutletId> {
+    pub fn add_const(&mut self, name: impl Into<String>, v: Arc<Tensor>) -> TractResult<OutletId> {
         let fact = F::from(v.clone());
         let name = name.into();
-        self.add_node(name, Const(v), vec![fact]).map(|id| id.into())
+        self.add_node(name, Const(v), vec![fact])
+            .map(|id| id.into())
     }
 }
 impl<F, O> Graph<F, O>
@@ -528,8 +542,16 @@ where
     F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    let inputs = model.input_outlets()?.iter().map(|n| n.node).collect::<Vec<usize>>();
-    let targets = model.output_outlets()?.iter().map(|n| n.node).collect::<Vec<usize>>();
+    let inputs = model
+        .input_outlets()?
+        .iter()
+        .map(|n| n.node)
+        .collect::<Vec<usize>>();
+    let targets = model
+        .output_outlets()?
+        .iter()
+        .map(|n| n.node)
+        .collect::<Vec<usize>>();
     eval_order_for_nodes(model.nodes(), &inputs, &targets, &[])
 }
 pub fn eval_order_for_nodes<F, O>(
@@ -552,8 +574,11 @@ where
         let mut pending = std::collections::HashSet::new();
         while let Some((current_node, current_input)) = current_stack.pop() {
             let deps_from_inputs = nodes[current_node].inputs.len();
-            let all_deps_count =
-                deps_from_inputs + more_dependencies.iter().filter(|a| a.0 == current_node).count();
+            let all_deps_count = deps_from_inputs
+                + more_dependencies
+                    .iter()
+                    .filter(|a| a.0 == current_node)
+                    .count();
             if model_inputs.contains(&current_node) || current_input == all_deps_count {
                 order.push(current_node);
                 done.insert(current_node);
@@ -564,7 +589,12 @@ where
                     .iter()
                     .filter(|n| nodes[n.node].inputs.len() > 0)
                     .map(|n| n.node)
-                    .chain(more_dependencies.iter().filter(|a| a.0 == current_node).map(|n| n.1))
+                    .chain(
+                        more_dependencies
+                            .iter()
+                            .filter(|a| a.0 == current_node)
+                            .map(|n| n.1),
+                    )
                     .chain(
                         nodes[current_node]
                             .inputs
@@ -682,8 +712,13 @@ where
     pub fn apply(self, target: &mut Graph<F, O>) -> TractResult<()> {
         let prior_target_inputs = target.input_outlets()?.len();
         let prior_target_outputs = target.output_outlets()?.len();
-        let ModelPatch { model: patch, incoming: mut mapping, shunt_outlet_by, obliterate, .. } =
-            self;
+        let ModelPatch {
+            model: patch,
+            incoming: mut mapping,
+            shunt_outlet_by,
+            obliterate,
+            ..
+        } = self;
         let mut all_inputs = HashMap::new();
         let model_input_outlets = target.input_outlets()?.to_vec();
         for node in patch.nodes {
@@ -692,12 +727,21 @@ where
             {
                 continue;
             }
-            let Node { id: patch_node_id, name, inputs, op, outputs } = node;
+            let Node {
+                id: patch_node_id,
+                name,
+                inputs,
+                op,
+                outputs,
+            } = node;
             let n_outputs = outputs.len();
             let facts = outputs.into_iter().map(|of| of.fact).collect();
             let added_node_id = target.add_node(name, op, facts)?;
             for ix in 0..n_outputs {
-                mapping.insert(OutletId::new(patch_node_id, ix), OutletId::new(added_node_id, ix));
+                mapping.insert(
+                    OutletId::new(patch_node_id, ix),
+                    OutletId::new(added_node_id, ix),
+                );
             }
             all_inputs.insert(added_node_id, inputs);
         }
@@ -760,7 +804,11 @@ where
             }
         }
         target.inputs = source.input_outlets()?.iter().map(|i| mapping[i]).collect();
-        target.outputs = source.output_outlets()?.iter().map(|o| mapping[o]).collect();
+        target.outputs = source
+            .output_outlets()?
+            .iter()
+            .map(|o| mapping[o])
+            .collect();
         Ok((target, mapping))
     }
 }
@@ -805,9 +853,20 @@ where
                 .collect::<TractResult<Vec<_>>>()?;
             let new_id = target.add_node(node.name.clone(), new_op, facts)?;
             for (ix, o) in node.inputs.iter().enumerate() {
-                target.add_edge(mapping[o], InletId { node: new_id, slot: ix })?
+                target.add_edge(
+                    mapping[o],
+                    InletId {
+                        node: new_id,
+                        slot: ix,
+                    },
+                )?
             }
-            Ok(node.outputs.iter().enumerate().map(|(ix, _)| OutletId::new(new_id, ix)).collect())
+            Ok(node
+                .outputs
+                .iter()
+                .enumerate()
+                .map(|(ix, _)| OutletId::new(new_id, ix))
+                .collect())
         }
     }
 }
@@ -834,8 +893,10 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
         let name = name.into();
         {
             let output_facts = || -> TractResult<Vec<TypedFact>> {
-                let input_facts =
-                    inputs.iter().map(|o| self.outlet_fact(*o)).collect::<TractResult<Vec<_>>>()?;
+                let input_facts = inputs
+                    .iter()
+                    .map(|o| self.outlet_fact(*o))
+                    .collect::<TractResult<Vec<_>>>()?;
                 let facts = op.output_facts(&input_facts)?;
                 Ok(facts)
             };
@@ -931,7 +992,11 @@ impl Optimizer {
         Optimizer { passes }
     }
     pub fn declutter() -> Optimizer {
-        Optimizer::passes(vec![Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0))])
+        Optimizer::passes(vec![Box::new(OpOptim(
+            "declutter",
+            TypedOp::declutter_with_session,
+            0,
+        ))])
     }
     pub fn codegen() -> Optimizer {
         Optimizer::passes(vec![
@@ -947,7 +1012,10 @@ impl Optimizer {
         self.session().optimize(model)
     }
     pub fn session(&self) -> OptimizerSession {
-        OptimizerSession { optimizer: self, counter: 0 }
+        OptimizerSession {
+            optimizer: self,
+            counter: 0,
+        }
     }
 }
 pub struct OptimizerSession<'o> {
@@ -1004,12 +1072,13 @@ impl<'o> OptimizerSession<'o> {
 }
 pub use std::borrow::Cow;
 pub use std::collections::HashMap;
-
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
     let wire = model.add_source("input", fact([1usize, 1])).unwrap();
-    let a = model.add_const("a", Tensor::zero(&[2, 1]).unwrap().into_arc_tensor()).unwrap();
+    let a = model
+        .add_const("a", Tensor::zero(&[2, 1]).unwrap().into_arc_tensor())
+        .unwrap();
     let op = MatMul {};
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
