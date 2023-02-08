@@ -19,13 +19,3 @@ downcast-rs.workspace = true
 dyn-clone.workspace = true
 anyhow.workspace = true
 ndarray.workspace = true
-
-[dev-dependencies]
-
-[[bench]]
-name = "tensor_from_datum"
-harness = false
-
-[[bench]]
-name = "stack_tensors"
-harness = false

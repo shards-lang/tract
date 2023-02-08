@@ -6,33 +6,21 @@ use std::alloc;
 pub fn tensor0(x: f32) -> Tensor {
     Tensor::from(arr0(x))
 }
-#[derive(Eq)]
 pub struct Tensor {
     shape: Vec<usize>,
     strides: Vec<isize>,
-    len: usize,
-    data: *mut u8,
+    data: Vec<f32>,
 }
-unsafe impl Send for Tensor {}
-unsafe impl Sync for Tensor {}
 impl Tensor {
-    pub unsafe fn uninitialized(shape: &[usize]) -> anyhow::Result<Tensor> {
+    pub fn uninitialized(shape: &[usize]) -> anyhow::Result<Tensor> {
         Self::uninitialized_aligned(shape, 4)
     }
-    pub unsafe fn uninitialized_aligned(
+    pub fn uninitialized_aligned(
         shape: &[usize],
         alignment: usize,
     ) -> anyhow::Result<Tensor> {
-        let bytes = shape.iter().cloned().product::<usize>() * 4;
-        let layout = alloc::Layout::from_size_align(bytes, alignment)?;
-        let data = if bytes == 0 {
-            unimplemented!()
-        } else {
-            let ptr = alloc::alloc(layout);
-            assert!(!ptr.is_null());
-            ptr
-        } as *mut u8;
-        let mut tensor = Tensor { strides: vec![], shape: shape.into(), data, len: 0 };
+	let data = vec!(0.0f32; shape.iter().cloned().product::<usize>());
+        let mut tensor = Tensor { strides: vec![], shape: shape.into(), data };
         tensor.update_strides_and_len();
         Ok(tensor)
     }
@@ -40,22 +28,18 @@ impl Tensor {
         self.fill(0.0)
     }
     pub fn zero(shape: &[usize]) -> anyhow::Result<Tensor> {
-        unsafe {
             let mut t = Tensor::uninitialized(shape)?;
             t.clear()?;
             Ok(t)
-        }
     }
     pub fn fill(&mut self, value: f32) -> anyhow::Result<()> {
         self.as_slice_mut()?.iter_mut().for_each(|item| *item = value.clone());
         Ok(())
     }
     pub fn zero_aligned(shape: &[usize], alignment: usize) -> anyhow::Result<Tensor> {
-        unsafe {
             let mut tensor = Self::uninitialized_aligned(shape, alignment)?;
             tensor.clear()?;
             Ok(tensor)
-        }
     }
     #[inline]
     pub fn rank(&self) -> usize {
@@ -68,31 +52,25 @@ impl Tensor {
     #[inline]
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        self.len
+        self.data.len()
     }
     fn update_strides_and_len(&mut self) {
         self.strides.clear();
         compute_natural_stride_to(&mut self.strides, &self.shape);
-        self.len = if self.rank() == 0 {
-            1
-        } else {
-            self.strides[0] as usize * self.shape[0]
-        }
     }
     pub fn as_ptr(&self) -> anyhow::Result<*const f32> {
-        Ok(self.data as *const f32)
+        Ok(self.data.as_ptr())
     }
     pub fn as_ptr_mut(&mut self) -> anyhow::Result<*mut f32> {
         self.as_ptr().map(|p| p as *mut f32)
     }
     pub fn as_slice_mut(&mut self) -> anyhow::Result<&mut [f32]> {
-        let ptr = self.as_ptr_mut()?;
-        unsafe { Ok(std::slice::from_raw_parts_mut(ptr, self.len())) }
+        Ok(&mut self.data)
     }
-    pub unsafe fn as_slice_unchecked(&self) -> &[f32] {
-        std::slice::from_raw_parts(self.data as *const f32, self.len())
+    pub fn as_slice_unchecked(&self) -> &[f32] {
+        &self.data
     }
-    unsafe fn is_uniform_t(&self) -> bool {
+    fn is_uniform_t(&self) -> bool {
         let slice = self.as_slice_unchecked();
         slice[1..].iter().all(|x| x == &slice[0])
     }
@@ -100,28 +78,24 @@ impl Tensor {
         if self.len() <= 1 {
             unimplemented!()
         }
-        unsafe { Tensor::is_uniform_t(self) }
+        Tensor::is_uniform_t(self)
     }
-    unsafe fn as_uniform_t(&self) -> Tensor {
+    fn as_uniform_t(&self) -> Tensor {
         let v = self.as_slice_unchecked()[0].clone();
         tensor0(v)
     }
     pub fn as_uniform(&self) -> Option<Tensor> {
         if self.len() >= 1 && self.is_uniform() {
-            unsafe {
                 let mut t = Tensor::as_uniform_t(self);
                 Some(t)
-            }
         } else {
             unimplemented!()
         }
     }
     fn from_datum(it: ArrayD<f32>) -> Tensor {
-        if it.as_slice().is_some() {
+        if let Some(data) = it.as_slice() {
             let shape = it.shape().into();
-            let vec = it.into_raw_vec().into_boxed_slice();
-            let data = Box::into_raw(vec) as *mut u8;
-            let mut t = Tensor { shape, data, strides: vec![], len: 0 };
+            let mut t = Tensor { shape, data: data.to_vec(), strides: vec![] };
             t.update_strides_and_len();
             return t;
         }
@@ -207,7 +181,7 @@ pub enum OutputStoreSpec {
     View { m_axis: usize },
     Strides { col_byte_stride: isize, mr: usize, nr: usize, m: usize, n: usize },
 }
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Clone)]
 pub enum ProtoFusedSpec {
     BinScalar(AttrOrInput, BinOp),
     BinPerRow(AttrOrInput, BinOp),
@@ -381,7 +355,7 @@ impl AsMut<dyn Op> for Box<dyn TypedOp> {
         unimplemented!()
     }
 }
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 pub enum AttrOrInput {
     Attr(Arc<Tensor>),
     Input(usize),
@@ -415,7 +389,7 @@ impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
         ShapeFact::from_dims(it)
     }
 }
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq)]
 pub struct TypedFact {
     pub shape: ShapeFact,
     pub konst: Option<Arc<Tensor>>,
