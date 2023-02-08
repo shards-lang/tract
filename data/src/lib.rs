@@ -4,7 +4,7 @@ use std::fmt;
 use ndarray::*;
 use std::alloc;
 pub fn tensor0(x: f32) -> Tensor {
-    Tensor::from(arr0(x))
+	Tensor { shape: vec!(), strides: vec!(), data: vec!(x) }
 }
 pub struct Tensor {
     shape: Vec<usize>,
@@ -92,15 +92,6 @@ impl Tensor {
             unimplemented!()
         }
     }
-    fn from_datum(it: ArrayD<f32>) -> Tensor {
-        if let Some(data) = it.as_slice() {
-            let shape = it.shape().into();
-            let mut t = Tensor { shape, data: data.to_vec(), strides: vec![] };
-            t.update_strides_and_len();
-            return t;
-        }
-        unimplemented!()
-    }
 }
 impl PartialEq for Tensor {
     fn eq(&self, _other: &Tensor) -> bool {
@@ -122,11 +113,6 @@ fn compute_natural_stride_to(strides: &mut Vec<isize>, shape: &[usize]) {
         _ => {
             unimplemented!()
         }
-    }
-}
-impl<D: ::ndarray::Dimension> From<Array<f32, D>> for Tensor {
-    fn from(it: Array<f32, D>) -> Tensor {
-        Tensor::from_datum(it.into_dyn())
     }
 }
 pub trait IntoArcTensor: Sized {
