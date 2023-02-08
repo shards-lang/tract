@@ -2,18 +2,6 @@
 #![allow(clippy::missing_safety_doc)]
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
-pub mod prelude {
-    pub use crate::datum::{Datum, DatumType};
-    pub use crate::tensor::{IntoArcTensor, IntoTensor, Tensor};
-    pub use crate::{TractError, TractResult};
-}
-pub mod internal {
-    pub use crate::prelude::*;
-}
-mod datum {
-    use crate::tensor::litteral::*;
-    use crate::tensor::Tensor;
-    use num_traits::AsPrimitive;
     use std::hash::Hash;
     use std::{fmt, ops};
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
@@ -53,8 +41,8 @@ mod datum {
         #[inline(always)]
         fn clamp_cast<O>(self) -> O
         where
-            Self: AsPrimitive<O> + Datum,
-            O: AsPrimitive<Self> + num_traits::Bounded + Datum,
+            Self: Datum,
+            O: Datum,
         {
             unimplemented!()
         }
@@ -83,22 +71,13 @@ mod datum {
         };
     }
     datum!(f32, F32);
-}
-mod tensor {
-    use crate::datum::{ClampCast, Datum, DatumType};
-    use ndarray::prelude::*;
     use std::alloc;
-    use std::fmt;
     use std::mem::{align_of, size_of};
     use std::sync::Arc;
-    pub mod litteral {
-        use super::Tensor;
-        use crate::datum::Datum;
         use ndarray::*;
         pub fn tensor0<A: Datum>(x: A) -> Tensor {
             Tensor::from(arr0(x))
         }
-    }
     #[derive(Eq)]
     pub struct Tensor {
         dt: DatumType,
@@ -149,10 +128,10 @@ mod tensor {
             tensor.update_strides_and_len();
             Ok(tensor)
         }
-        pub fn clear<T: Datum + num_traits::Zero + Clone>(&mut self) -> anyhow::Result<()> {
-            self.fill_t(T::zero())
+        pub fn clear<T: Datum + Clone>(&mut self) -> anyhow::Result<()> {
+            self.fill_t::<f32>(0.0)
         }
-        pub fn zero<T: Datum + num_traits::Zero>(shape: &[usize]) -> anyhow::Result<Tensor> {
+        pub fn zero<T: Datum>(shape: &[usize]) -> anyhow::Result<Tensor> {
             unsafe {
                 let mut t = Tensor::uninitialized::<T>(shape)?;
                 t.clear::<T>()?;
@@ -165,7 +144,7 @@ mod tensor {
                 .for_each(|item| *item = value.clone());
             Ok(())
         }
-        pub fn zero_aligned<T: Datum + num_traits::Zero>(
+        pub fn zero_aligned<T: Datum>(
             shape: &[usize],
             alignment: usize,
         ) -> anyhow::Result<Tensor> {
@@ -252,7 +231,7 @@ mod tensor {
         }
         unsafe fn as_uniform_t<T: Datum>(&self) -> Tensor {
             let v: T = self.as_slice_unchecked::<T>()[0].clone();
-            litteral::tensor0(v)
+            tensor0(v)
         }
         pub fn as_uniform(&self) -> Option<Tensor> {
             if self.len() >= 1 && self.is_uniform() {
@@ -330,4 +309,3 @@ mod tensor {
             self
         }
     }
-}

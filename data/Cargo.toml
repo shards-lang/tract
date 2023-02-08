@@ -16,9 +16,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 anyhow.workspace = true
-itertools.workspace = true
 ndarray.workspace = true
-num-traits.workspace = true
 
 [dev-dependencies]
 

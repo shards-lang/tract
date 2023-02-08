@@ -3,6 +3,7 @@
 #![allow(clippy::redundant_closure_call)]
 #[macro_use]
 pub extern crate downcast_rs;
+use tract_data::*;
 use std::sync::Arc;
     use downcast_rs::Downcast;
         macro_rules! as_op {
@@ -1103,7 +1104,6 @@ use std::sync::Arc;
     }
     pub use std::borrow::Cow;
     pub use std::collections::HashMap;
-    pub use tract_data::internal::*;
 
 #[test]
 fn crasher_monterey_matmul() {
