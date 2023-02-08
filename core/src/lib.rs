@@ -186,7 +186,6 @@ pub mod ops {
                 ) -> TractResult<Option<TypedModelPatch>> {
                     let patch = self.new_mat_mul_unary_finite(model, node)?;
                     Ok(None)
-                    /* CRASH HERE */ 
                 }
                 as_op!();
             }
@@ -306,12 +305,12 @@ pub mod ops {
             let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[axes.a_m].clone(), ashape[axes.a_k].clone());
             let (_, n) = (bshape[axes.b_k].clone(), bshape[axes.b_n].clone());
-                c_shape.insert(axes.c_n, n.clone());
-                c_shape.insert(axes.c_m, m.clone());
+            c_shape.insert(axes.c_n, n.clone());
+            c_shape.insert(axes.c_m, m.clone());
             Ok((m, ka, n, c_shape))
         }
         pub fn output_type(input: DatumType) -> DatumType {
-		input
+            input
         }
     }
     pub mod source {
@@ -335,9 +334,7 @@ pub mod ops {
     pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_typed(&self) -> Option<&dyn TypedOp>;
     }
-    pub trait TypedOp:
-        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast
-    {
+    pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_op(&self) -> &dyn Op;
         fn as_op_mut(&mut self) -> &mut dyn Op;
         fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>>;
@@ -385,7 +382,7 @@ pub mod ops {
     }
     impl AsRef<dyn Op> for Box<dyn TypedOp> {
         fn as_ref(&self) -> &dyn Op {
-            self.as_op()
+            unimplemented!()
         }
     }
     impl AsMut<dyn Op> for Box<dyn TypedOp> {
@@ -434,10 +431,6 @@ pub mod model {
                     .collect::<TractResult<TVec<_>>>()
                     .ok()
             }
-            #[inline]
-            pub fn as_concrete(&self) -> Option<&[usize]> {
-                self.concrete.as_deref()
-            }
             pub fn from_dims<D: ToDim, T: IntoIterator<Item = D>>(it: T) -> ShapeFact {
                 let mut dims = ShapeFact {
                     dims: it.into_iter().map(|d| d.to_dim()).collect(),
@@ -447,14 +440,7 @@ pub mod model {
                 dims
             }
             pub fn compatible_with(&self, _other: &ShapeFact) -> bool {
-                if self.rank() == _other.rank() {
-                    self.dims
-                        .iter()
-                        .zip(_other.dims.iter())
-                        .all(|(dim, other_dim)| dim.compatible_with(other_dim))
-                } else {
-                    unimplemented!()
-                }
+                unimplemented!()
             }
         }
         impl std::ops::Deref for ShapeFact {
@@ -529,17 +515,7 @@ pub mod model {
                 unimplemented!()
             }
             fn compatible_with(&self, other: &dyn Fact) -> bool {
-                if cfg!(debug_assertions) {
-                    self.consistent().unwrap()
-                }
-                if let Some(other) = other.downcast_ref::<Self>() {
-                    if cfg!(debug_assertions) {
-                        other.consistent().unwrap()
-                    }
-                    self.datum_type == other.datum_type && self.shape.compatible_with(&other.shape)
-                } else {
-                    unimplemented!()
-                }
+                unimplemented!()
             }
             fn datum_type(&self) -> Option<DatumType> {
                 unimplemented!()
@@ -723,19 +699,9 @@ pub mod model {
             pub fn nodes(&self) -> &[Node<F, O>] {
                 &self.nodes
             }
-            pub fn node_input_facts(&self, node_id: usize) -> TractResult<TVec<&F>> {
-                self.nodes[node_id]
-                    .inputs
-                    .iter()
-                    .map(|o| self.outlet_fact(*o))
-                    .collect()
-            }
             pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
                 let outlets = &self.nodes[outlet.node].outputs;
                 Ok(outlets.get(outlet.slot).map(|o| &o.fact).unwrap())
-            }
-            pub fn outlet_label(&self, outlet: OutletId) -> Option<&str> {
-                self.outlet_labels.get(&outlet).map(|s| &**s)
             }
             pub fn eval_order(&self) -> TractResult<Vec<usize>> {
                 eval_order(self)
@@ -787,21 +753,6 @@ pub mod model {
             #[cfg_attr(feature = "serialize", serde(skip))]
             pub op: O,
             pub outputs: TVec<Outlet<F>>,
-        }
-        impl<F, NodeOp> Node<F, NodeOp>
-        where
-            F: Fact,
-            NodeOp: AsRef<dyn Op> + AsMut<dyn Op> + AsMut<dyn Op>,
-        {
-            pub fn op(&self) -> &dyn Op {
-                self.op.as_ref()
-            }
-            pub fn op_as<O: Op>(&self) -> Option<&O> {
-                self.op().downcast_ref::<O>()
-            }
-            pub fn op_is<O: Op>(&self) -> bool {
-                self.op_as::<O>().is_some()
-            }
         }
         #[derive(Clone, Default)]
         pub struct Outlet<F: Fact> {
@@ -957,7 +908,7 @@ pub mod model {
         {
             type Target = Graph<F, O>;
             fn deref(&self) -> &Graph<F, O> {
-                &self.model
+                unimplemented!()
             }
         }
         impl<F, O> DerefMut for ModelPatch<F, O>
@@ -988,11 +939,7 @@ pub mod model {
                 self.incoming.insert(id, outlet);
                 Ok(id)
             }
-            pub fn shunt_outside(
-                &mut self,
-                outlet: OutletId,
-                by: OutletId,
-            ) -> TractResult<()> {
+            pub fn shunt_outside(&mut self, outlet: OutletId, by: OutletId) -> TractResult<()> {
                 self.shunt_outlet_by.insert(outlet, by);
                 Ok(())
             }
@@ -1014,7 +961,7 @@ pub mod model {
                     .collect::<TractResult<TVec<_>>>()?;
                 let wires = patch.wire_node(&node.name, new_op, &inputs)?;
                 for (ix, o) in wires.iter().enumerate() {
-                    patch.shunt_outside( OutletId::new(node.id, ix), *o)?;
+                    patch.shunt_outside(OutletId::new(node.id, ix), *o)?;
                 }
                 patch.obliterate(node.id)?;
                 Ok(patch)
@@ -1331,14 +1278,14 @@ pub mod optim {
     }
     impl Optimizer {
         fn passes(passes: Vec<Box<dyn TypedPass>>) -> Optimizer {
-            Optimizer {
-                passes,
-            }
+            Optimizer { passes }
         }
         pub fn declutter() -> Optimizer {
-            Optimizer::passes(vec![
-                Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
-            ])
+            Optimizer::passes(vec![Box::new(OpOptim(
+                "declutter",
+                TypedOp::declutter_with_session,
+                0,
+            ))])
         }
         pub fn codegen() -> Optimizer {
             Optimizer::passes(vec![
@@ -1425,14 +1372,8 @@ pub mod value {
     pub trait IntoTValue {
         fn into_tvalue(self) -> TValue;
     }
-    impl IntoTValue for Arc<Tensor> {
-        fn into_tvalue(self) -> TValue {
-            Const(self)
-        }
-    }
 }
 pub mod prelude {
-    pub use crate::value::{IntoTValue, TValue};
     pub use std::sync::Arc;
 }
 pub mod internal {
