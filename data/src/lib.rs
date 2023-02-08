@@ -93,8 +93,7 @@ pub struct MatMul {}
 impl Op for MatMul {}
 impl TypedOp for MatMul {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        let (_m, _k, _n, c_shape) = compute_shape(&inputs[0].shape, &inputs[1].shape)?;
-        Ok(vec![fact(c_shape)])
+        Ok(vec![fact([2,1])])
     }
     fn declutter(
         &self,
@@ -119,38 +118,25 @@ pub struct MatMulUnary {
 impl Op for MatMulUnary {}
 impl TypedOp for MatMulUnary {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        let (_m, _k, _n, c_shape) = compute_shape(&self.a.shape(), &inputs[0].shape)?;
-        Ok(vec![fact(c_shape)])
+        Ok(vec![fact([2,1])])
     }
     fn codegen(
         &self,
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        let patch = self.new_mat_mul_unary_finite(model, node)?;
-        Ok(Some(patch))
-    }
-    as_op!();
-}
-impl MatMulUnary {
-    fn new_mat_mul_unary_finite(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<TypedModelPatch> {
-        let mut patch = TypedModelPatch::default();
-        let mut wire = patch.tap_model(model, node.inputs[0])?;
         let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
             let pa = Tensor::zero(&[64]);
             (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
         });
-        wire = patch.wire_node(format!("{}.pack", &*node.name), MatMatMulPack {}, &[wire])?[0];
-        let op = LirMatMulUnary {
-            micro_ops: packed_as,
-        };
-        patch.wire_node(format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
-        Ok(patch)
+        TypedModelPatch::replace_single_op(
+            model,
+            node,
+            &node.inputs,
+            LirMatMulUnary { micro_ops: packed_as },
+        ).map(Some)
     }
+    as_op!();
 }
 #[derive(Clone, PartialEq, Eq)]
 pub struct MatMatMulPack {}
@@ -160,14 +146,6 @@ impl TypedOp for MatMatMulPack {
         Ok(vec![fact([1])])
     }
     as_op!();
-}
-pub fn compute_shape(
-    ashape: &[usize],
-    bshape: &[usize],
-) -> TractResult<(usize, usize, usize, Vec<usize>)> {
-    let (m, k) = (ashape[0], ashape[1]);
-    let n = bshape[1];
-    Ok((m, k, n, vec!(n, m)))
 }
 #[derive(Clone)]
 pub struct TypedSource {}
