@@ -331,7 +331,6 @@ pub mod ops {
         pub use self::mir_unary::MatMulUnary;
         use self::pack::MatMatMulPack;
         use crate::internal::*;
-        use tract_itertools::Itertools;
         #[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
         pub struct MatMulAxes {
             pub a_m: usize,
@@ -359,9 +358,6 @@ pub mod ops {
                     c_m: c - 2,
                     c_n: c - 1,
                 }
-            }
-            pub fn transposing_a(self) -> Self {
-                unimplemented!()
             }
             pub fn transposing_b(self) -> Self {
                 MatMulAxes {
@@ -651,11 +647,6 @@ pub mod model {
             fn datum_type(&self) -> Option<DatumType>;
         }
         impl_downcast!(Fact);
-        impl fmt::Debug for ShapeFact {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
-            }
-        }
         #[derive(Clone, PartialEq, Eq, Hash)]
         pub struct TypedFact {
             pub datum_type: DatumType,
@@ -687,9 +678,6 @@ pub mod model {
                     self.consistent().unwrap();
                 }
                 self.shape.rank()
-            }
-            fn format_dt_shape_nocheck(&self) -> String {
-                unimplemented!()
             }
             pub fn consistent(&self) -> TractResult<()> {
                 if let Some(k) = &self.konst {
@@ -824,7 +812,6 @@ pub mod model {
     mod graph {
         use crate::internal::*;
         use std::fmt;
-        use tract_itertools::Itertools;
         pub trait SpecialOps<F, O> {
             fn create_dummy(&self) -> O;
             fn create_source(&self, fact: F) -> O;
@@ -956,9 +943,6 @@ pub mod model {
                 self.outputs = outputs.to_vec();
                 Ok(())
             }
-            pub fn node_id_by_name(&self, name: &str) -> TractResult<usize> {
-                unimplemented!()
-            }
             pub fn node(&self, id: usize) -> &Node<F, O> {
                 &self.nodes[id]
             }
@@ -975,9 +959,6 @@ pub mod model {
                     .map(|o| self.outlet_fact(*o))
                     .collect()
             }
-            pub fn node_output_facts(&self, node_id: usize) -> TractResult<TVec<&F>> {
-                unimplemented!()
-            }
             pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
                 anyhow::ensure!(outlet.node < self.nodes.len(), "Invalid outlet for graph");
                 let outlets = &self.nodes[outlet.node].outputs;
@@ -988,9 +969,6 @@ pub mod model {
             }
             pub fn outlet_label(&self, outlet: OutletId) -> Option<&str> {
                 self.outlet_labels.get(&outlet).map(|s| &**s)
-            }
-            pub fn set_outlet_label(&mut self, outlet: OutletId, label: String) -> TractResult<()> {
-                unimplemented!()
             }
             pub fn eval_order(&self) -> TractResult<Vec<usize>> {
                 eval_order(self)
@@ -1046,15 +1024,6 @@ pub mod model {
                 let name = name.into();
                 self.add_node(name, crate::ops::konst::Const::new(v), tvec!(fact))
                     .map(|id| id.into())
-            }
-        }
-        impl<F, O> fmt::Display for Graph<F, O>
-        where
-            F: Fact + Hash + Clone + 'static,
-            O: fmt::Debug + fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
-        {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                unimplemented!()
             }
         }
         impl<F, O> Graph<F, O>
@@ -1116,7 +1085,6 @@ pub mod model {
         use crate::internal::*;
         use std::fmt;
         use std::fmt::{Debug, Display};
-        use tract_itertools::Itertools;
         #[derive(Debug, Clone, Educe)]
         #[educe(Hash)]
         pub struct Node<F: Fact + Hash, O: Hash> {
@@ -1182,11 +1150,6 @@ pub mod model {
         pub struct InletId {
             pub node: usize,
             pub slot: usize,
-        }
-        impl fmt::Debug for InletId {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
-            }
         }
     }
     pub mod order {
@@ -1279,11 +1242,6 @@ pub mod model {
         use std::fmt::{Debug, Display};
         use std::ops::{Deref, DerefMut};
         use tract_data::itertools::{izip, Itertools};
-        #[doc = " A change to apply to a model."]
-        #[doc = ""]
-        #[doc = " Actually structured around a model that represent the new nodes to be"]
-        #[doc = " inserted, plus information about how to connect these new nodes to the"]
-        #[doc = " pre-existing graph."]
         #[derive(Clone, Debug)]
         pub struct ModelPatch<F, O>
         where
@@ -1798,7 +1756,6 @@ pub mod optim {
         use crate::internal::*;
         use crate::ops::konst::Const;
         use crate::optim::OptimizerSession;
-        use tract_data::UndeterminedSymbol;
         #[derive(Clone, Debug)]
         pub struct PropConst;
         impl super::TypedPass for PropConst {
@@ -1991,27 +1948,6 @@ pub mod value {
         Const(Arc<Tensor>),
         Var(Rc<Tensor>),
     }
-    impl From<Tensor> for TValue {
-        fn from(t: Tensor) -> Self {
-            unimplemented!()
-        }
-    }
-    impl std::ops::Deref for TValue {
-        type Target = Tensor;
-        fn deref(&self) -> &Self::Target {
-            unimplemented!()
-        }
-    }
-    impl IntoTensor for TValue {
-        fn into_tensor(self) -> Tensor {
-            unimplemented!()
-        }
-    }
-    impl IntoArcTensor for TValue {
-        fn into_arc_tensor(self) -> Arc<Tensor> {
-            unimplemented!()
-        }
-    }
     pub trait IntoTValue {
         fn into_tvalue(self) -> TValue;
     }
@@ -2035,15 +1971,16 @@ pub mod internal {
     pub use std::hash::Hash;
     pub use tract_data::internal::*;
 }
-
 #[test]
 fn crasher_monterey_matmul() {
     use crate::internal::*;
-    use tract_ndarray::prelude::*;
     use crate::ops::matmul::*;
+    use tract_ndarray::prelude::*;
     let mut model = TypedModel::default();
-    let wire = model.add_source("input", f32::fact(&[1usize,1])).unwrap();
-    let a = model.add_const("a", Tensor::zero::<f32>(&[2,1]).unwrap().into_arc_tensor()).unwrap();
+    let wire = model.add_source("input", f32::fact(&[1usize, 1])).unwrap();
+    let a = model
+        .add_const("a", Tensor::zero::<f32>(&[2, 1]).unwrap().into_arc_tensor())
+        .unwrap();
     let axes = MatMulAxes::default_for_rank(2).transposing(false, true, true);
     let op = MatMul { axes };
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
