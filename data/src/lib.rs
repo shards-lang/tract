@@ -224,15 +224,6 @@ pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
     fn as_op(&self) -> &dyn Op;
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>>;
     #[allow(unused_variables)]
-    fn declutter_with_session(
-        &self,
-        session: &mut OptimizerSession,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        self.declutter(model, node)
-    }
-    #[allow(unused_variables)]
     fn declutter(
         &self,
         model: &TypedModel,
@@ -625,7 +616,6 @@ where
     F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    pub dont_apply_twice: Option<String>,
     pub model: Graph<F, O>,
     pub inputs: HashMap<usize, usize>,
     pub incoming: HashMap<OutletId, OutletId>,
@@ -639,7 +629,6 @@ where
 {
     fn default() -> ModelPatch<F, O> {
         ModelPatch {
-            dont_apply_twice: None,
             model: Graph::default(),
             inputs: HashMap::default(),
             incoming: HashMap::new(),
@@ -917,159 +906,6 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
         }
     }
 }
-impl TypedModel {
-    pub fn into_optimized(mut self) -> TractResult<TypedModel> {
-        self.declutter()?;
-        self.optimize()?;
-        Ok(self)
-    }
-    pub fn into_decluttered(mut self) -> TractResult<TypedModel> {
-        self.declutter()?;
-        Ok(self)
-    }
-    pub fn declutter(&mut self) -> TractResult<()> {
-        Optimizer::declutter().session().optimize(self)
-    }
-    pub fn optimize(&mut self) -> TractResult<()> {
-        Optimizer::codegen().optimize(self)
-    }
-}
-#[derive(Clone)]
-pub struct OpOptim(
-    pub &'static str,
-    pub  fn(
-        op: &dyn TypedOp,
-        session: &mut OptimizerSession,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>>,
-    pub usize,
-);
-impl OpOptim {
-    fn full_pass(
-        &mut self,
-        session: &mut OptimizerSession,
-        new: &TypedModel,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        for (ix, &id) in new.eval_order()?.iter().enumerate().skip(self.2) {
-            let node = &new.nodes()[id];
-            let patch = (self.1)(node.op.as_ref(), session, new, node)?;
-            if let Some(p) = patch {
-                self.2 = ix + p.dont_apply_twice.is_some() as usize;
-                return Ok(Some(p));
-            }
-        }
-        Ok(None)
-    }
-}
-impl TypedPass for OpOptim {
-    fn reset(&mut self) -> TractResult<()> {
-        self.2 = 0;
-        Ok(())
-    }
-    fn next(
-        &mut self,
-        session: &mut OptimizerSession,
-        model: &TypedModel,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        self.full_pass(session, model)
-    }
-}
-pub trait TypedPass: Send + Sync + dyn_clone::DynClone {
-    fn reset(&mut self) -> TractResult<()>;
-    fn next(
-        &mut self,
-        session: &mut OptimizerSession,
-        model: &TypedModel,
-    ) -> TractResult<Option<TypedModelPatch>>;
-}
-dyn_clone::clone_trait_object!(TypedPass);
-pub struct Optimizer {
-    passes: Vec<Box<dyn TypedPass>>,
-}
-impl Optimizer {
-    fn passes(passes: Vec<Box<dyn TypedPass>>) -> Optimizer {
-        Optimizer { passes }
-    }
-    pub fn declutter() -> Optimizer {
-        Optimizer::passes(vec![Box::new(OpOptim(
-            "declutter",
-            TypedOp::declutter_with_session,
-            0,
-        ))])
-    }
-    pub fn codegen() -> Optimizer {
-        Optimizer::passes(vec![
-            Box::new(OpOptim(
-                "codegen",
-                |op, _session, model, node| TypedOp::codegen(op, model, node),
-                0,
-            )),
-            Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
-        ])
-    }
-    pub fn optimize(&self, model: &mut TypedModel) -> TractResult<()> {
-        self.session().optimize(model)
-    }
-    pub fn session(&self) -> OptimizerSession {
-        OptimizerSession {
-            optimizer: self,
-            counter: 0,
-        }
-    }
-}
-pub struct OptimizerSession<'o> {
-    optimizer: &'o Optimizer,
-    counter: usize,
-}
-impl<'o> OptimizerSession<'o> {
-    pub fn optimize(&mut self, model: &mut TypedModel) -> TractResult<()> {
-        model.compact()?;
-        for _i in 0.. {
-            let old = self.counter;
-            self.run_all_passes(model)?;
-            if old == self.counter {
-                return Ok(());
-            }
-            model.compact()?;
-        }
-        unreachable!()
-    }
-    pub fn run_all_passes(&mut self, model: &mut TypedModel) -> TractResult<()> {
-        let mut passes = self.optimizer.passes.clone();
-        for p in passes.iter_mut() {
-            self.run_one_pass_outer(p.as_mut(), model)?;
-            model.compact()?;
-        }
-        Ok(())
-    }
-    pub fn run_one_pass_outer(
-        &mut self,
-        p: &mut dyn TypedPass,
-        model: &mut TypedModel,
-    ) -> TractResult<()> {
-        loop {
-            let old_counter = self.counter;
-            self.run_one_pass_inner(p, model)?;
-            if self.counter == old_counter {
-                return Ok(());
-            }
-            model.compact()?;
-        }
-    }
-    pub fn run_one_pass_inner(
-        &mut self,
-        p: &mut dyn TypedPass,
-        model: &mut TypedModel,
-    ) -> TractResult<()> {
-        p.reset()?;
-        while let Some(patch) = p.next(self, model)? {
-            patch.apply(model)?;
-            self.counter += 1;
-        }
-        Ok(())
-    }
-}
 pub use std::borrow::Cow;
 pub use std::collections::HashMap;
 #[test]
@@ -1079,9 +915,12 @@ fn crasher_monterey_matmul() {
     let a = model
         .add_const("a", Tensor::zero(&[2, 1]).unwrap().into_arc_tensor())
         .unwrap();
-    let op = MatMul {};
-    let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
+    let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
-    let decluttered = model.into_decluttered().unwrap();
-    let _optimized = decluttered.into_optimized().unwrap();
+    let patch = model.node(wire.node).op.declutter(&model, model.node(wire.node)).unwrap().unwrap();
+    patch.apply(&mut model).unwrap();
+    model.compact().unwrap();
+
+    let wire = model.outputs[0];
+    let patch = model.node(wire.node).op.codegen(&model, model.node(wire.node)).unwrap().unwrap();
 }
