@@ -414,8 +414,7 @@ pub mod ops {
                     }
                 })
                 .collect();
-            let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc])
-                .ok_or_else(|| format_err!("Could not broadcast"))?;
+            let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[axes.a_m].clone(), ashape[axes.a_k].clone());
             let (kb, n) = (bshape[axes.b_k].clone(), bshape[axes.b_n].clone());
             if ka != kb {
@@ -960,12 +959,10 @@ pub mod model {
                     .collect()
             }
             pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
-                anyhow::ensure!(outlet.node < self.nodes.len(), "Invalid outlet for graph");
                 let outlets = &self.nodes[outlet.node].outputs;
-                outlets
+                Ok(outlets
                     .get(outlet.slot)
-                    .map(|o| &o.fact)
-                    .with_context(|| format!("Invalid outlet reference: {outlet:?}"))
+                    .map(|o| &o.fact).unwrap())
             }
             pub fn outlet_label(&self, outlet: OutletId) -> Option<&str> {
                 self.outlet_labels.get(&outlet).map(|s| &**s)
@@ -1072,10 +1069,6 @@ pub mod model {
             pub fn compact(&mut self) -> TractResult<()> {
                 use crate::model::translator::Translate;
                 let mut result = crate::model::translator::IntoTranslator.translate_model(self)?;
-                #[cfg(debug_assertions)]
-                {
-                    result.check_compact().context("after graph compaction")?;
-                }
                 std::mem::swap(self, &mut result);
                 Ok(())
             }
@@ -1473,8 +1466,7 @@ pub mod model {
                     let node = source.node(old_id);
                     trace!("Translating {} {:?}", node, self);
                     let outlets = self
-                        .translate_node(source, node, &mut target, &mapping)
-                        .with_context(|| format!("Translating node {node} {self:?}"))?;
+                        .translate_node(source, node, &mut target, &mapping)?;
                     for (ix, outlet) in outlets.into_iter().enumerate() {
                         mapping.insert(OutletId::new(node.id, ix), outlet);
                         if let Some(label) = source.outlet_label(OutletId::new(node.id, ix)) {
@@ -1599,16 +1591,13 @@ pub mod model {
                             .map(|o| self.outlet_fact(*o))
                             .collect::<TractResult<TVec<_>>>()?;
                         let facts = op
-                            .output_facts(&input_facts)
-                            .context("in output_facts invocation")?;
+                            .output_facts(&input_facts)?;
                         if input_facts.iter().all(|f| f.konst.is_some()) && op.is_stateless() {
                             unimplemented!()
                         }
                         Ok(facts)
                     };
-                    let output_facts = output_facts().with_context(|| {
-                        format!("wiring {name} ({op:?}), determining output_facts")
-                    })?;
+                    let output_facts = output_facts()?;
                     let id = self.add_node(&name, &op, output_facts)?;
                     inputs
                         .iter()
@@ -1623,7 +1612,6 @@ pub mod model {
                             .collect(),
                     )
                 }
-                .with_context(|| format!("Wiring node \"{name}\", {op:?}"))
             }
         }
         impl TypedModel {
@@ -1632,45 +1620,7 @@ pub mod model {
                 self.optimize()?;
                 Ok(self)
             }
-            #[cfg(not(all(debug_assertions, feature = "paranoid_assertions")))]
-            #[inline]
             pub fn check_consistency(&self) -> TractResult<()> {
-                Ok(())
-            }
-            #[cfg(all(debug_assertions, feature = "paranoid_assertions"))]
-            pub fn check_consistency(&self) -> TractResult<()> {
-                self.check_edges()?;
-                for node_id in &self.eval_order()? {
-                    let input_facts = self.node_input_facts(*node_id)?;
-                    let node = &self.nodes[*node_id];
-                    if node.id != *node_id {
-                        unimplemented!()
-                    }
-                    let output_facts = node.op.output_facts(&input_facts)?;
-                    if node.outputs.len() != output_facts.len() {
-                        unimplemented!()
-                    }
-                    if node
-                        .outputs
-                        .iter()
-                        .map(|o| &o.fact)
-                        .zip(output_facts.iter())
-                        .any(|(a, b)| a.datum_type != b.datum_type || a.shape != b.shape)
-                    {
-                        unimplemented!()
-                    }
-                }
-                for node in &self.nodes {
-                    for (ix, output) in node.outputs.iter().enumerate() {
-                        output.fact.consistent().with_context(|| {
-                            format!(
-                                "Inconsistent fact {:?}: {:?}",
-                                OutletId::new(node.id, ix),
-                                output.fact
-                            )
-                        })?
-                    }
-                }
                 Ok(())
             }
             pub fn into_decluttered(mut self) -> TractResult<TypedModel> {
@@ -1722,8 +1672,7 @@ pub mod optim {
             ) -> TractResult<Option<TypedModelPatch>> {
                 for (ix, &id) in new.eval_order()?.iter().enumerate().skip(self.2) {
                     let node = &new.nodes()[id];
-                    let patch = (self.1)(node.op.as_ref(), session, new, node)
-                        .with_context(|| format!("{self:?} node {node}"))?;
+                    let patch = (self.1)(node.op.as_ref(), session, new, node)?;
                     if let Some(mut p) = patch {
                         p.push_context(format!("{self:?} {node}"));
                         self.2 = ix + p.dont_apply_twice.is_some() as usize;
@@ -1852,11 +1801,9 @@ pub mod optim {
     impl<'o> OptimizerSession<'o> {
         pub fn optimize(&mut self, model: &mut TypedModel) -> TractResult<()> {
             model
-                .check_consistency()
-                .context("during optimizer preflight check")?;
+                .check_consistency()?;
             model
-                .compact()
-                .context("during optimizer preflight compaction")?;
+                .compact()?;
             for i in 0.. {
                 let old = self.counter;
                 self.run_all_passes(i, model)?;
@@ -1870,12 +1817,10 @@ pub mod optim {
         pub fn run_all_passes(&mut self, i: usize, model: &mut TypedModel) -> TractResult<()> {
             let mut passes = self.optimizer.passes.clone();
             for p in passes.iter_mut() {
-                self.run_one_pass_outer(i, p.as_mut(), model)
-                    .with_context(|| format!("running pass {p:?}"))?;
+                self.run_one_pass_outer(i, p.as_mut(), model)?;
                 model.compact()?;
                 model
-                    .check_consistency()
-                    .with_context(|| format!("consistency check after pass {p:?}"))?;
+                    .check_consistency()?;
             }
             Ok(())
         }
@@ -1892,8 +1837,7 @@ pub mod optim {
                     return Ok(());
                 }
                 model
-                    .compact()
-                    .with_context(|| format!("after pass {p:?}"))?;
+                    .compact()?;
             }
         }
         pub fn run_one_pass_inner(
@@ -1910,11 +1854,9 @@ pub mod optim {
                 patch.push_context(format!("{p:?}/{i}"));
                 patch
                     .model
-                    .check_consistency()
-                    .context("checking patch internal consistency")?;
+                    .check_consistency()?;
                 model
-                    .check_consistency()
-                    .context("Checking target model consistency before patching")?;
+                    .check_consistency()?;
                 if let Some(watchdog) = patch.dont_apply_twice.take() {
                     unimplemented!()
                 }
@@ -1925,16 +1867,14 @@ pub mod optim {
                 );
                 patch.apply(model)?;
                 model
-                    .check_consistency()
-                    .context("Checking target model consistency after patchign")?;
+                    .check_consistency()?;
                 self.counter += 1;
                 if let Some(steps) = self.optimizer.steps {
                     unimplemented!()
                 }
             }
             model
-                .check_consistency()
-                .with_context(|| format!("after pass {p:?}"))?;
+                .check_consistency()?;
             Ok(())
         }
     }
@@ -1965,7 +1905,6 @@ pub mod internal {
     pub use crate::model::*;
     pub use crate::ops::{AttrOrInput, EvalOp, Op};
     pub use crate::prelude::*;
-    pub use anyhow::{anyhow, bail, ensure, format_err, Context as TractErrorContext};
     pub use std::borrow::Cow;
     pub use std::collections::HashMap;
     pub use std::hash::Hash;

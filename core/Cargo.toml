@@ -15,7 +15,6 @@ rust-version = "1.65"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-anyhow.workspace = true
 bit-set.workspace = true
 derive-new.workspace = true
 downcast-rs.workspace = true
