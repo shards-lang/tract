@@ -44,12 +44,11 @@ pub mod ops {
     }
     pub mod dummy {
         use crate::internal::*;
-        #[derive(Clone, Default, Hash)]
+        #[derive(Clone, Default)]
         pub struct Dummy;
         impl Op for Dummy {
             op_as_typed_op!();
         }
-        impl_dyn_hash!(Dummy);
         impl EvalOp for Dummy {
             fn is_stateless(&self) -> bool {
                 unimplemented!()
@@ -64,9 +63,8 @@ pub mod ops {
     }
     pub mod konst {
         use crate::internal::*;
-        #[derive(Clone, Hash)]
+        #[derive(Clone)]
         pub struct Const(pub Arc<Tensor>);
-        impl_dyn_hash!(Const);
         impl Op for Const {
             op_as_typed_op!();
         }
@@ -86,12 +84,12 @@ pub mod ops {
         pub mod lir_unary {
             use crate::internal::*;
             use ndarray::*;
-            #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+            #[derive(Copy, Clone, PartialEq, Eq)]
             pub enum BinOp {
                 Min,
                 Max,
             }
-            #[derive(Clone, Copy, Eq, PartialEq, Hash)]
+            #[derive(Clone, Copy, Eq, PartialEq)]
             pub enum OutputStoreSpec {
                 View {
                     m_axis: usize,
@@ -104,7 +102,7 @@ pub mod ops {
                     n: usize,
                 },
             }
-            #[derive(PartialEq, Eq, Clone, Hash)]
+            #[derive(PartialEq, Eq, Clone)]
             pub enum ProtoFusedSpec {
                 BinScalar(AttrOrInput, BinOp),
                 BinPerRow(AttrOrInput, BinOp),
@@ -113,14 +111,9 @@ pub mod ops {
                 AddUnicast(OutputStoreSpec, AttrOrInput),
                 Store,
             }
-            #[derive(Clone,  Hash)]
+            #[derive(Clone)]
             pub struct LirMatMulUnary {
                 pub micro_ops: ArrayD<(Arc<Tensor>, Vec<ProtoFusedSpec>)>,
-            }
-            impl DynHash for LirMatMulUnary {
-                fn dyn_hash(&self, hasher: &mut dyn std::hash::Hasher) {
-                    unimplemented!()
-                }
             }
             impl Op for LirMatMulUnary {
                 op_as_typed_op!();
@@ -139,11 +132,10 @@ pub mod ops {
         }
         pub mod mir {
             use crate::ops::matmul::*;
-            #[derive(Clone, Default, Hash)]
+            #[derive(Clone, Default)]
             pub struct MatMul {
                 pub axes: MatMulAxes,
             }
-            impl_dyn_hash!(MatMul);
             impl Op for MatMul {
                 op_as_typed_op!();
             }
@@ -198,12 +190,11 @@ pub mod ops {
             use super::lir_unary::{LirMatMulUnary, ProtoFusedSpec};
             use super::*;
             use tract_ndarray::prelude::*;
-            #[derive(Clone, Hash)]
+            #[derive(Clone)]
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
                 pub axes: MatMulAxes,
             }
-            impl_dyn_hash!(MatMulUnary);
             impl Op for MatMulUnary {
                 op_as_typed_op!();
             }
@@ -269,13 +260,8 @@ pub mod ops {
         }
         pub mod pack {
             use crate::internal::*;
-            #[derive(Clone, PartialEq, Eq, Hash)]
+            #[derive(Clone, PartialEq, Eq)]
             pub struct MatMatMulPack {}
-            impl DynHash for MatMatMulPack {
-                fn dyn_hash(&self, hasher: &mut dyn std::hash::Hasher) {
-                    unimplemented!()
-                }
-            }
             impl Op for MatMatMulPack {
                 op_as_typed_op!();
             }
@@ -302,7 +288,7 @@ pub mod ops {
         pub use self::mir_unary::MatMulUnary;
         use self::pack::MatMatMulPack;
         use crate::internal::*;
-        #[derive(PartialEq, Eq, Clone, Copy, Hash)]
+        #[derive(PartialEq, Eq, Clone, Copy)]
         pub struct MatMulAxes {
             pub a_m: usize,
             pub a_k: usize,
@@ -409,11 +395,10 @@ pub mod ops {
     }
     pub mod source {
         use crate::internal::*;
-        #[derive(Clone, Hash)]
+        #[derive(Clone)]
         pub struct TypedSource {
             pub fact: TypedFact,
         }
-        impl_dyn_hash!(TypedSource);
         impl Op for TypedSource {
             op_as_typed_op!();
         }
@@ -439,7 +424,7 @@ pub mod ops {
         fn is_stateless(&self) -> bool;
     }
     pub trait Op:
-         dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
+         dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp
     {
         fn same_as(&self, _other: &dyn Op) -> bool {
             false
@@ -447,7 +432,7 @@ pub mod ops {
         fn as_typed(&self) -> Option<&dyn TypedOp>;
     }
     pub trait TypedOp:
-        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
+        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp
     {
         fn as_op(&self) -> &dyn Op;
         fn as_op_mut(&mut self) -> &mut dyn Op;
@@ -504,7 +489,7 @@ pub mod ops {
             unimplemented!()
         }
     }
-    #[derive(Clone, Hash, PartialEq, Eq)]
+    #[derive(Clone, PartialEq, Eq)]
     pub enum AttrOrInput {
         Attr(Arc<Tensor>),
         Input(usize),
@@ -526,21 +511,12 @@ mod broadcast {
         Some(shape)
     }
 }
-mod hash {
-    use crate::ops::*;
-    use std::hash::{Hash, Hasher};
-    impl Hash for Box<dyn TypedOp> {
-        fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-            unimplemented!()
-        }
-    }
-}
 pub mod model {
     mod fact {
         use crate::internal::*;
         use downcast_rs::Downcast;
         use std::fmt;
-        #[derive(Clone, PartialEq, Eq, Hash)]
+        #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
             dims: TVec<TDim>,
             concrete: Option<TVec<usize>>,
@@ -608,7 +584,7 @@ pub mod model {
             fn datum_type(&self) -> Option<DatumType>;
         }
         impl_downcast!(Fact);
-        #[derive(Clone, PartialEq, Eq, Hash)]
+        #[derive(Clone, PartialEq, Eq)]
         pub struct TypedFact {
             pub datum_type: DatumType,
             pub shape: ShapeFact,
@@ -779,32 +755,23 @@ pub mod model {
                 inputs: &[OutletId],
             ) -> TractResult<TVec<OutletId>>;
         }
-        #[derive(Clone, Educe)]
-        #[educe(Hash)]
+        #[derive(Clone)]
         pub struct Graph<F, O>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub nodes: Vec<Node<F, O>>,
             pub inputs: Vec<OutletId>,
             pub outputs: Vec<OutletId>,
-            #[educe(Hash(method = "hash_outlet_labels"))]
             pub outlet_labels: HashMap<OutletId, String>,
-            #[educe(Hash(method = "hash_properties"))]
             pub properties: HashMap<String, Arc<Tensor>>,
             pub symbol_table: SymbolTable,
         }
-        fn hash_outlet_labels<H: std::hash::Hasher>(it: &HashMap<OutletId, String>, state: &mut H) {
-            unimplemented!()
-        }
-        fn hash_properties<H: std::hash::Hasher>(it: &HashMap<String, Arc<Tensor>>, state: &mut H) {
-            unimplemented!()
-        }
         impl<F, O> Default for Graph<F, O>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static
         {
             fn default() -> Graph<F, O> {
                 Graph {
@@ -819,8 +786,8 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             Graph<F, O>: SpecialOps<F, O>,
         {
             pub fn add_source(
@@ -837,8 +804,8 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static
         {
             pub fn add_node(
                 &mut self,
@@ -931,13 +898,12 @@ pub mod model {
         }
         impl<F: Fact + Clone + 'static, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static + From<std::sync::Arc<Tensor>> + Hash,
+            F: Fact + Clone + 'static + From<std::sync::Arc<Tensor>>,
             O: 
                  From<crate::ops::konst::Const>
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
-                + Hash
                 + 'static,
         {
             pub fn add_const(
@@ -954,14 +920,13 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static + std::hash::Hash + for<'a> std::convert::From<&'a F>,
+            F: Fact + Clone + 'static + for<'a> std::convert::From<&'a F>,
             O:
                  Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
                 + 'static
-                + std::hash::Hash
                 + for<'a> std::convert::From<&'a O>,
             Graph<F, O>: SpecialOps<F, O>,
         {
@@ -976,9 +941,8 @@ pub mod model {
     mod node {
         use crate::internal::*;
         use std::fmt;
-        #[derive(Clone, Educe)]
-        #[educe(Hash)]
-        pub struct Node<F: Fact + Hash, O: Hash> {
+        #[derive(Clone)]
+        pub struct Node<F: Fact, O> {
             pub id: usize,
             pub name: String,
             pub inputs: Vec<OutletId>,
@@ -988,8 +952,8 @@ pub mod model {
         }
         impl<F, NodeOp> Node<F, NodeOp>
         where
-            F: Fact + Hash,
-            NodeOp: AsRef<dyn Op> + AsMut<dyn Op> + AsMut<dyn Op> + Hash,
+            F: Fact,
+            NodeOp: AsRef<dyn Op> + AsMut<dyn Op> + AsMut<dyn Op>,
         {
             pub fn op(&self) -> &dyn Op {
                 self.op.as_ref()
@@ -1001,13 +965,12 @@ pub mod model {
                 self.op_as::<O>().is_some()
             }
         }
-        #[derive(Clone, Default, Educe)]
-        #[educe(Hash)]
-        pub struct Outlet<F: Fact + Hash> {
+        #[derive(Clone, Default)]
+        pub struct Outlet<F: Fact> {
             pub fact: F,
             pub successors: TVec<InletId>,
         }
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct OutletId {
             pub node: usize,
             pub slot: usize,
@@ -1027,7 +990,7 @@ pub mod model {
                 OutletId::new(pair.0, pair.1)
             }
         }
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd)]
+        #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
         pub struct InletId {
             pub node: usize,
             pub slot: usize,
@@ -1037,8 +1000,8 @@ pub mod model {
         use crate::internal::*;
         pub fn eval_order<F, O>(model: &super::Graph<F, O>) -> TractResult<Vec<usize>>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             let inputs = model
                 .input_outlets()?
@@ -1059,8 +1022,8 @@ pub mod model {
             more_dependencies: &[(usize, usize)],
         ) -> TractResult<Vec<usize>>
         where
-            F: Fact + Hash + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             let mut done = std::collections::HashSet::new();
             let mut order: Vec<usize> = vec![];
@@ -1124,8 +1087,8 @@ pub mod model {
         #[derive(Clone)]
         pub struct ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static + Hash,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub dont_apply_twice: Option<String>,
             pub model: Graph<F, O>,
@@ -1136,8 +1099,8 @@ pub mod model {
         }
         impl<F, O> Default for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static + Hash,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn default() -> ModelPatch<F, O> {
                 ModelPatch {
@@ -1152,8 +1115,8 @@ pub mod model {
         }
         impl<F, O> Deref for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static + Hash,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             type Target = Graph<F, O>;
             fn deref(&self) -> &Graph<F, O> {
@@ -1162,8 +1125,8 @@ pub mod model {
         }
         impl<F, O> DerefMut for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static + Hash,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn deref_mut(&mut self) -> &mut Graph<F, O> {
                 &mut self.model
@@ -1171,8 +1134,8 @@ pub mod model {
         }
         impl<F, O> ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static + Hash,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            F: Fact + Clone + 'static,
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             Graph<F, O>: SpecialOps<F, O>,
         {
             pub fn tap_model(
@@ -1322,10 +1285,10 @@ pub mod model {
         use std::fmt;
         pub trait Translate<TI1, O1, TI2, O2>
         where
-            TI1: Fact + Hash + Clone + 'static,
-            TI2: Fact + Hash + Clone + 'static,
-            O1:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
-            O2:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            TI1: Fact + Clone + 'static,
+            TI2: Fact + Clone + 'static,
+            O1:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+            O2:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn translate_node(
                 &self,
@@ -1373,21 +1336,21 @@ pub mod model {
         impl<TI1, O1, TI2, O2, EO, ETI> Translate<TI1, O1, TI2, O2> for IntoTranslator
         where
             TractError: From<EO> + From<ETI>,
-            TI1: Fact + Hash + Clone + 'static,
-            TI2: Fact + Hash + for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
+            TI1: Fact + Clone + 'static,
+            TI2: Fact + for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
             O1:
                 Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
                 + 'static
-                + Hash,
+               ,
             O2:
                  for<'a> TryFrom<&'a O1, Error = ETI>
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
-                + Hash
+               
                 + 'static,
             Graph<TI2, O2>: SpecialOps<TI2, O2>,
         {
