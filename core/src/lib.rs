@@ -14,17 +14,6 @@ pub mod ops {
                 fn as_op(&self) -> &dyn Op {
                     self
                 }
-                fn as_op_mut(&mut self) -> &mut dyn Op {
-                    self
-                }
-            };
-        }
-        #[macro_export]
-        macro_rules! op_as_typed_op {
-            () => {
-                fn as_typed(&self) -> Option<&dyn TypedOp> {
-                    Some(self)
-                }
             };
         }
     }
@@ -33,7 +22,6 @@ pub mod ops {
         #[derive(Clone, Default)]
         pub struct Dummy;
         impl Op for Dummy {
-            op_as_typed_op!();
         }
         impl TypedOp for Dummy {
             as_op!();
@@ -47,7 +35,6 @@ pub mod ops {
         #[derive(Clone)]
         pub struct Const(pub Arc<Tensor>);
         impl Op for Const {
-            op_as_typed_op!();
         }
         impl TypedOp for Const {
             as_op!();
@@ -92,7 +79,6 @@ pub mod ops {
                 pub micro_ops: ArrayD<(Arc<Tensor>, Vec<ProtoFusedSpec>)>,
             }
             impl Op for LirMatMulUnary {
-                op_as_typed_op!();
             }
             impl TypedOp for LirMatMulUnary {
                 fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -103,49 +89,32 @@ pub mod ops {
         }
         pub mod mir {
             use crate::ops::matmul::*;
-            #[derive(Clone, Default)]
+            #[derive(Clone)]
             pub struct MatMul {
-                pub axes: MatMulAxes,
             }
             impl Op for MatMul {
-                op_as_typed_op!();
             }
             impl TypedOp for MatMul {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                    if inputs[0].rank() != inputs[1].rank() {
-                        unimplemented!()
-                    }
                     let (_m, _k, _n, c_shape) =
-                        compute_shape(&inputs[0].shape, &inputs[1].shape, self.axes)?;
-                    Ok(tvec!(output_type(inputs[0].datum_type).fact(c_shape)))
+                        compute_shape(&inputs[0].shape, &inputs[1].shape)?;
+                    Ok(tvec!(f32::fact(c_shape)))
                 }
                 fn declutter(
                     &self,
                     model: &TypedModel,
                     node: &TypedNode,
                 ) -> TractResult<Option<TypedModelPatch>> {
-                    let a_fact = model.outlet_fact(node.inputs[0])?;
-                    let b_fact = model.outlet_fact(node.inputs[1])?;
-                    let konst_ix = if a_fact.konst.is_some() {
-                        0
-                    } else if b_fact.konst.is_some() {
-                        unimplemented!()
-                    } else {
-                        unimplemented!()
-                    };
-                    let var_ix = 1 - konst_ix;
-                    let flip = konst_ix == 1;
-                    let axes = if flip { unimplemented!() } else { self.axes };
                     let konst = model
-                        .outlet_fact(node.inputs[konst_ix])?
+                        .outlet_fact(node.inputs[0])?
                         .konst
                         .clone()
                         .unwrap();
                     TypedModelPatch::replace_single_op(
                         model,
                         node,
-                        &node.inputs[var_ix..][..1],
-                        MatMulUnary { a: konst, axes },
+                        &node.inputs[1..2],
+                        MatMulUnary { a: konst },
                     )
                     .map(Some)
                 }
@@ -159,10 +128,8 @@ pub mod ops {
             #[derive(Clone)]
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
-                pub axes: MatMulAxes,
             }
             impl Op for MatMulUnary {
-                op_as_typed_op!();
             }
             impl TypedOp for MatMulUnary {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -174,7 +141,6 @@ pub mod ops {
                             .map(|d| d.to_dim())
                             .collect::<TVec<_>>(),
                         &inputs[0].shape,
-                        self.axes,
                     )?;
                     let c_dt = output_type(inputs[0].datum_type);
                     Ok(tvec!(c_dt.fact(c_shape)))
@@ -219,7 +185,6 @@ pub mod ops {
             #[derive(Clone, PartialEq, Eq)]
             pub struct MatMatMulPack {}
             impl Op for MatMatMulPack {
-                op_as_typed_op!();
             }
             impl TypedOp for MatMatMulPack {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -239,74 +204,17 @@ pub mod ops {
         pub use self::mir_unary::MatMulUnary;
         use self::pack::MatMatMulPack;
         use crate::internal::*;
-        #[derive(PartialEq, Eq, Clone, Copy)]
-        pub struct MatMulAxes {
-            pub a_m: usize,
-            pub a_k: usize,
-            pub b_k: usize,
-            pub b_n: usize,
-            pub c_m: usize,
-            pub c_n: usize,
-        }
-        impl Default for MatMulAxes {
-            fn default() -> Self {
-                unimplemented!()
-            }
-        }
-        impl MatMulAxes {
-            pub fn default_for_rank(rank: usize) -> Self {
-                Self::default_for_ranks(rank, rank, rank)
-            }
-            pub fn default_for_ranks(a: usize, b: usize, c: usize) -> Self {
-                MatMulAxes {
-                    a_m: a - 2,
-                    a_k: a - 1,
-                    b_k: b - 2,
-                    b_n: b - 1,
-                    c_m: c - 2,
-                    c_n: c - 1,
-                }
-            }
-            pub fn transposing_b(self) -> Self {
-                MatMulAxes {
-                    b_n: self.b_k,
-                    b_k: self.b_n,
-                    ..self
-                }
-            }
-            pub fn transposing_c(self) -> Self {
-                MatMulAxes {
-                    c_n: self.c_m,
-                    c_m: self.c_n,
-                    ..self
-                }
-            }
-            pub fn transposing(self, a: bool, b: bool, c: bool) -> Self {
-                let mut it = self;
-                if a {
-                    unimplemented!()
-                }
-                if b {
-                    it = it.transposing_b();
-                }
-                if c {
-                    it = it.transposing_c();
-                }
-                it
-            }
-        }
         pub fn compute_shape<D: DimLike>(
             ashape: &[D],
             bshape: &[D],
-            axes: MatMulAxes,
         ) -> TractResult<(D, D, D, TVec<D>)> {
             let a_shape_bc: TVec<D> = tvec!();
             let b_shape_bc = tvec!();
             let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
-            let (m, ka) = (ashape[axes.a_m].clone(), ashape[axes.a_k].clone());
-            let (_, n) = (bshape[axes.b_k].clone(), bshape[axes.b_n].clone());
-            c_shape.insert(axes.c_n, n.clone());
-            c_shape.insert(axes.c_m, m.clone());
+            let (m, ka) = (ashape[0].clone(), ashape[1].clone());
+            let (_, n) = (bshape[0].clone(), bshape[1].clone());
+            c_shape.insert(0, n.clone());
+            c_shape.insert(1, m.clone());
             Ok((m, ka, n, c_shape))
         }
         pub fn output_type(input: DatumType) -> DatumType {
@@ -317,10 +225,8 @@ pub mod ops {
         use crate::internal::*;
         #[derive(Clone)]
         pub struct TypedSource {
-            pub fact: TypedFact,
         }
         impl Op for TypedSource {
-            op_as_typed_op!();
         }
         impl TypedOp for TypedSource {
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -332,11 +238,9 @@ pub mod ops {
     use crate::internal::*;
     use crate::optim::OptimizerSession;
     pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {
-        fn as_typed(&self) -> Option<&dyn TypedOp>;
     }
     pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_op(&self) -> &dyn Op;
-        fn as_op_mut(&mut self) -> &mut dyn Op;
         fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>>;
         #[allow(unused_variables)]
         fn declutter_with_session(
@@ -1111,8 +1015,8 @@ pub mod model {
             fn create_dummy(&self) -> Box<dyn TypedOp> {
                 Box::new(crate::ops::dummy::Dummy::default())
             }
-            fn create_source(&self, fact: TypedFact) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::source::TypedSource { fact })
+            fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
+                Box::new(crate::ops::source::TypedSource { })
             }
             fn wire_node(
                 &mut self,
@@ -1339,8 +1243,7 @@ fn crasher_monterey_matmul() {
     let a = model
         .add_const("a", Tensor::zero::<f32>(&[2, 1]).unwrap().into_arc_tensor())
         .unwrap();
-    let axes = MatMulAxes::default_for_rank(2).transposing(false, true, true);
-    let op = MatMul { axes };
+    let op = MatMul { };
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
     let decluttered = model.into_decluttered().unwrap();
