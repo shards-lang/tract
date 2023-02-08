@@ -17,7 +17,7 @@ use std::sync::Arc;
         impl Op for Dummy {}
         impl TypedOp for Dummy {
             as_op!();
-            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
                 unimplemented!()
             }
         }
@@ -26,7 +26,7 @@ use std::sync::Arc;
         impl Op for Const {}
         impl TypedOp for Const {
             as_op!();
-            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
                 unimplemented!()
             }
         }
@@ -64,8 +64,8 @@ use std::sync::Arc;
             }
             impl Op for LirMatMulUnary {}
             impl TypedOp for LirMatMulUnary {
-                fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                    Ok(tvec!(f32::fact([1, 2])))
+                fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
+                    Ok(vec!(f32::fact([1, 2])))
                 }
                 as_op!();
             }
@@ -73,9 +73,9 @@ use std::sync::Arc;
             pub struct MatMul {}
             impl Op for MatMul {}
             impl TypedOp for MatMul {
-                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
                     let (_m, _k, _n, c_shape) = compute_shape(&inputs[0].shape, &inputs[1].shape)?;
-                    Ok(tvec!(f32::fact(c_shape)))
+                    Ok(vec!(f32::fact(c_shape)))
                 }
                 fn declutter(
                     &self,
@@ -99,18 +99,18 @@ use std::sync::Arc;
             }
             impl Op for MatMulUnary {}
             impl TypedOp for MatMulUnary {
-                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
                     let (_m, _k, _n, c_shape) = compute_shape(
                         &self
                             .a
                             .shape()
                             .iter()
                             .map(|d| d.to_dim())
-                            .collect::<TVec<_>>(),
+                            .collect::<Vec<_>>(),
                         &inputs[0].shape,
                     )?;
                     let c_dt = output_type(inputs[0].datum_type);
-                    Ok(tvec!(c_dt.fact(c_shape)))
+                    Ok(vec!(c_dt.fact(c_shape)))
                 }
                 fn codegen(
                     &self,
@@ -150,24 +150,24 @@ use std::sync::Arc;
             pub struct MatMatMulPack {}
             impl Op for MatMatMulPack {}
             impl TypedOp for MatMatMulPack {
-                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                    Ok(tvec!(inputs[0]
+                fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
+                    Ok(vec!(inputs[0]
                         .datum_type
                         .fact(self.output_shape(&inputs[0].shape))))
                 }
                 as_op!();
             }
             impl MatMatMulPack {
-                fn output_shape<D: DimLike>(&self, _input: &[D]) -> TVec<D> {
-                    tvec!(1.into())
+                fn output_shape<D: DimLike>(&self, _input: &[D]) -> Vec<D> {
+                    vec!(1.into())
                 }
             }
         pub fn compute_shape<D: DimLike>(
             ashape: &[D],
             bshape: &[D],
-        ) -> TractResult<(D, D, D, TVec<D>)> {
-            let a_shape_bc: TVec<D> = tvec!();
-            let b_shape_bc = tvec!();
+        ) -> TractResult<(D, D, D, Vec<D>)> {
+            let a_shape_bc: Vec<D> = vec!();
+            let b_shape_bc = vec!();
             let mut c_shape = multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[0].clone(), ashape[1].clone());
             let (_, n) = (bshape[0].clone(), bshape[1].clone());
@@ -182,7 +182,7 @@ use std::sync::Arc;
         pub struct TypedSource {}
         impl Op for TypedSource {}
         impl TypedOp for TypedSource {
-            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
+            fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
                 unimplemented!()
             }
             as_op!();
@@ -190,7 +190,7 @@ use std::sync::Arc;
     pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {}
     pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_op(&self) -> &dyn Op;
-        fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>>;
+        fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>>;
         #[allow(unused_variables)]
         fn declutter_with_session(
             &self,
@@ -248,16 +248,16 @@ use std::sync::Arc;
         Attr(Arc<Tensor>),
         Input(usize),
     }
-    pub fn multi_broadcast<D>(_shapes: &[impl AsRef<[D]>]) -> Option<TVec<D>>
+    pub fn multi_broadcast<D>(_shapes: &[impl AsRef<[D]>]) -> Option<Vec<D>>
     where
         D: DimLike,
     {
-        Some(tvec!())
+        Some(vec!())
     }
         #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
-            dims: TVec<TDim>,
-            concrete: Option<TVec<usize>>,
+            dims: Vec<TDim>,
+            concrete: Option<Vec<usize>>,
         }
         impl ShapeFact {
             fn compute_concrete(&mut self) {
@@ -269,7 +269,7 @@ use std::sync::Arc;
                     .dims
                     .iter()
                     .map(|d| d.to_usize())
-                    .collect::<TractResult<TVec<_>>>()
+                    .collect::<TractResult<Vec<_>>>()
                     .ok()
             }
             pub fn from_dims<D: ToDim, T: IntoIterator<Item = D>>(it: T) -> ShapeFact {
@@ -379,7 +379,7 @@ use std::sync::Arc;
                 name: impl Into<String>,
                 op: impl Into<O>,
                 inputs: &[OutletId],
-            ) -> TractResult<TVec<OutletId>>;
+            ) -> TractResult<Vec<OutletId>>;
         }
         #[derive(Clone)]
         pub struct Graph<F, O>
@@ -422,7 +422,7 @@ use std::sync::Arc;
                 fact: F,
             ) -> TractResult<OutletId> {
                 let source = self.create_source(fact.clone());
-                let id = self.add_node(name, source, tvec!(fact))?;
+                let id = self.add_node(name, source, vec!(fact))?;
                 let id = OutletId::new(id, 0);
                 self.inputs.push(id);
                 Ok(id)
@@ -437,7 +437,7 @@ use std::sync::Arc;
                 &mut self,
                 name: impl Into<String>,
                 op: impl Into<O>,
-                output_facts: TVec<F>,
+                output_facts: Vec<F>,
             ) -> TractResult<usize> {
                 let op = op.into();
                 let name = name.into();
@@ -446,7 +446,7 @@ use std::sync::Arc;
                     .into_iter()
                     .map(|fact| Outlet {
                         fact,
-                        successors: tvec!(),
+                        successors: vec!(),
                     })
                     .collect();
                 let node = Node {
@@ -515,7 +515,7 @@ use std::sync::Arc;
                 let v = v.into_arc_tensor();
                 let fact = F::from(v.clone());
                 let name = name.into();
-                self.add_node(name, Const(v), tvec!(fact))
+                self.add_node(name, Const(v), vec!(fact))
                     .map(|id| id.into())
             }
         }
@@ -543,12 +543,12 @@ use std::sync::Arc;
             pub inputs: Vec<OutletId>,
             #[cfg_attr(feature = "serialize", serde(skip))]
             pub op: O,
-            pub outputs: TVec<Outlet<F>>,
+            pub outputs: Vec<Outlet<F>>,
         }
         #[derive(Clone, Default)]
         pub struct Outlet<F> {
             pub fact: F,
-            pub successors: TVec<InletId>,
+            pub successors: Vec<InletId>,
         }
         #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         pub struct OutletId {
@@ -743,7 +743,7 @@ use std::sync::Arc;
                 let inputs = inputs
                     .iter()
                     .map(|i| patch.tap_model(patched_model, *i))
-                    .collect::<TractResult<TVec<_>>>()?;
+                    .collect::<TractResult<Vec<_>>>()?;
                 let wires = patch.wire_node(&node.name, new_op, &inputs)?;
                 for (ix, o) in wires.iter().enumerate() {
                     patch.shunt_outside(OutletId::new(node.id, ix), *o)?;
@@ -828,7 +828,7 @@ use std::sync::Arc;
                 node: &Node<TI1, O1>,
                 target: &mut Graph<TI2, O2>,
                 mapping: &HashMap<OutletId, OutletId>,
-            ) -> TractResult<TVec<OutletId>>;
+            ) -> TractResult<Vec<OutletId>>;
             fn translate_model(&self, source: &Graph<TI1, O1>) -> TractResult<Graph<TI2, O2>> {
                 Ok(self.translate_model_with_mappings(source)?.0)
             }
@@ -876,7 +876,7 @@ use std::sync::Arc;
                 node: &Node<TI1, O1>,
                 target: &mut Graph<TI2, O2>,
                 mapping: &HashMap<OutletId, OutletId>,
-            ) -> TractResult<TVec<OutletId>> {
+            ) -> TractResult<Vec<OutletId>> {
                 let node_is_input =
                     (0..node.outputs.len()).all(|o| source.inputs.contains(&(node.id, o).into()));
                 if node_is_input {
@@ -898,7 +898,7 @@ use std::sync::Arc;
                         .outputs
                         .iter()
                         .map(|of| Ok(TI2::try_from(&of.fact)?))
-                        .collect::<TractResult<TVec<_>>>()?;
+                        .collect::<TractResult<Vec<_>>>()?;
                     let new_id = target.add_node(node.name.clone(), new_op, facts)?;
                     for (ix, o) in node.inputs.iter().enumerate() {
                         target.add_edge(
@@ -938,15 +938,15 @@ use std::sync::Arc;
                 name: impl Into<String>,
                 op: impl Into<Box<dyn TypedOp>>,
                 inputs: &[OutletId],
-            ) -> TractResult<TVec<OutletId>> {
+            ) -> TractResult<Vec<OutletId>> {
                 let op = op.into();
                 let name = name.into();
                 {
-                    let output_facts = || -> TractResult<TVec<TypedFact>> {
+                    let output_facts = || -> TractResult<Vec<TypedFact>> {
                         let input_facts = inputs
                             .iter()
                             .map(|o| self.outlet_fact(*o))
-                            .collect::<TractResult<TVec<_>>>()?;
+                            .collect::<TractResult<Vec<_>>>()?;
                         let facts = op.output_facts(&input_facts)?;
                         Ok(facts)
                     };
