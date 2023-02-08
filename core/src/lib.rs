@@ -1319,18 +1319,6 @@ pub mod optim {
         }
     }
 }
-pub mod value {
-    use crate::internal::*;
-    use std::rc::Rc;
-    #[derive(Clone, PartialEq, Eq)]
-    pub enum TValue {
-        Const(Arc<Tensor>),
-        Var(Rc<Tensor>),
-    }
-    pub trait IntoTValue {
-        fn into_tvalue(self) -> TValue;
-    }
-}
 pub mod prelude {
     pub use std::sync::Arc;
 }
