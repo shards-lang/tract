@@ -1,41 +1,15 @@
 #![allow(clippy::len_zero)]
 #![allow(clippy::missing_safety_doc)]
-#[macro_use]
-mod macros {
-    #[macro_export]
-    macro_rules ! tvec { (@ one $ x : expr) => (1usize) ; ($ elem : expr ; $ n : expr) => ({ $ crate :: TVec :: from_elem ($ elem , $ n) }) ; ($ ($ x : expr) ,*$ (,) *) => ({ let count = 0usize $ (+ tvec ! (@ one $ x)) *; # [allow (unused_mut)] let mut vec = $ crate :: TVec :: new () ; if count <= vec . inline_size () { $ (vec . push ($ x) ;) * vec } else { $ crate :: TVec :: from_vec (vec ! [$ ($ x ,) *]) } }) ; }
-    #[macro_export]
-    macro_rules ! dispatch_datum { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: Bool => $ ($ path) ::*::< bool > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< u16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< u32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< u64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , DatumType :: Blob => $ ($ path) ::*::< Blob > ($ ($ args) ,*) , DatumType :: TDim => $ ($ path) ::*::< TDim > ($ ($ args) ,*) , DatumType :: String => $ ($ path) ::*::< String > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , } } } }
-    #[macro_export]
-    macro_rules ! dispatch_datum_by_size { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: Bool => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: Blob => $ ($ path) ::*::< Blob > ($ ($ args) ,*) , DatumType :: TDim => $ ($ path) ::*::< TDim > ($ ($ args) ,*) , DatumType :: String => $ ($ path) ::*::< String > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , } } } }
-    #[macro_export]
-    macro_rules ! dispatch_copy { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: Bool => $ ($ path) ::*::< bool > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< u16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< u32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< u64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , _ => panic ! ("{:?} is not Copy" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_copy_by_size { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: Bool => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , _ => panic ! ("{:?} is not Copy" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_numbers { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: U8 => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< u16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< u32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< u64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , _ => $ crate :: anyhow :: bail ! ("{:?} is not a number" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_zerolike { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: TDim => $ ($ path) ::*::< TDim > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< u16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< u32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< u64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , DatumType :: QI8 (_) => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: QU8 (_) => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: QI32 (_) => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , _ => $ crate :: anyhow :: bail ! ("{:?} is doesn't implement num_traits::Zero" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_floatlike { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , _ => $ crate :: anyhow :: bail ! ("{:?} is not float-like" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_signed { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: F16 => $ ($ path) ::*::< f16 > ($ ($ args) ,*) , DatumType :: F32 => $ ($ path) ::*::< f32 > ($ ($ args) ,*) , DatumType :: F64 => $ ($ path) ::*::< f64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: TDim => $ ($ path) ::*::< TDim > ($ ($ args) ,*) , _ => $ crate :: anyhow :: bail ! ("{:?} is not signed" , $ dt) } } } }
-    #[macro_export]
-    macro_rules ! dispatch_hash { ($ ($ path : ident) ::* ($ dt : expr) ($ ($ args : expr) ,*)) => { { use $ crate :: prelude :: DatumType ; match $ dt { DatumType :: Bool => $ ($ path) ::*::< bool > ($ ($ args) ,*) , DatumType :: U8 => $ ($ path) ::*::< u8 > ($ ($ args) ,*) , DatumType :: U16 => $ ($ path) ::*::< u16 > ($ ($ args) ,*) , DatumType :: U32 => $ ($ path) ::*::< u32 > ($ ($ args) ,*) , DatumType :: U64 => $ ($ path) ::*::< u64 > ($ ($ args) ,*) , DatumType :: I8 => $ ($ path) ::*::< i8 > ($ ($ args) ,*) , DatumType :: I16 => $ ($ path) ::*::< i16 > ($ ($ args) ,*) , DatumType :: I32 => $ ($ path) ::*::< i32 > ($ ($ args) ,*) , DatumType :: I64 => $ ($ path) ::*::< i64 > ($ ($ args) ,*) , DatumType :: Blob => $ ($ path) ::*::< Blob > ($ ($ args) ,*) , DatumType :: TDim => $ ($ path) ::*::< TDim > ($ ($ args) ,*) , DatumType :: String => $ ($ path) ::*::< String > ($ ($ args) ,*) , DatumType :: ComplexI16 => $ ($ path) ::*::< Complex < i16 >> ($ ($ args) ,*) , DatumType :: ComplexI32 => $ ($ path) ::*::< Complex < i32 >> ($ ($ args) ,*) , DatumType :: ComplexI64 => $ ($ path) ::*::< Complex < i64 >> ($ ($ args) ,*) , _ => $ crate :: anyhow :: bail ! ("{:?} is not Hash" , $ dt) } } } }
-}
-pub type TVec<T> = smallvec::SmallVec<[T; 4]>;
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 pub mod prelude {
     pub use crate::datum::{round_ties_to_even, Blob, Datum, DatumType, QParams};
     pub use crate::dim::{Symbol, SymbolTable, SymbolValues, TDim, ToDim};
-    pub use crate::tensor::{natural_strides, IntoArcTensor, IntoTensor, Tensor};
-    pub use crate::tvec;
-    pub use crate::TVec;
+    pub use crate::tensor::{IntoArcTensor, IntoTensor, Tensor};
     pub use crate::{TractError, TractResult};
 }
 pub mod internal {
-    pub use crate::dim::{parse_tdim, DimLike};
+    pub use crate::dim::{DimLike};
     pub use crate::prelude::*;
 }
 pub use anyhow;
@@ -43,10 +17,7 @@ mod datum {
     use crate::dim::TDim;
     use crate::tensor::litteral::*;
     use crate::tensor::Tensor;
-    use crate::TVec;
-    use half::f16;
     use num_traits::AsPrimitive;
-    use scan_fmt::scan_fmt;
     use std::hash::Hash;
     use std::{fmt, ops};
     #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
@@ -99,34 +70,21 @@ mod datum {
     }
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
     pub enum DatumType {
-        Bool,
-        U8,
-        U16,
-        U32,
-        U64,
         I8,
         I16,
         I32,
         I64,
-        F16,
         F32,
-        F64,
         TDim,
         Blob,
         String,
-        QI8(QParams),
-        QU8(QParams),
-        QI32(QParams),
     }
     impl DatumType {
-        pub fn super_types(&self) -> TVec<DatumType> {
+        pub fn super_types(&self) -> Vec<DatumType> {
             unimplemented!()
         }
         pub fn is_unsigned(&self) -> bool {
-            matches!(
-                self.unquantized(),
-                DatumType::U8 | DatumType::U16 | DatumType::U32 | DatumType::U64
-            )
+false
         }
         pub fn is_signed(&self) -> bool {
             matches!(
@@ -135,10 +93,10 @@ mod datum {
             )
         }
         pub fn is_float(&self) -> bool {
-            matches!(self, DatumType::F16 | DatumType::F32 | DatumType::F64)
+            matches!(self, DatumType::F32)
         }
         pub fn is_copy(&self) -> bool {
-            *self == DatumType::Bool || self.is_unsigned() || self.is_signed() || self.is_float()
+            self.is_unsigned() || self.is_signed() || self.is_float()
         }
         pub fn is_quantized(&self) -> bool {
             unimplemented!()
@@ -152,9 +110,6 @@ mod datum {
         }
         pub fn unquantized(&self) -> DatumType {
             match self {
-                DatumType::QI8(_) => DatumType::I8,
-                DatumType::QU8(_) => DatumType::U8,
-                DatumType::QI32(_) => DatumType::I32,
                 _ => *self,
             }
         }
@@ -163,7 +118,7 @@ mod datum {
         }
         #[inline]
         pub fn size_of(&self) -> usize {
-            dispatch_datum!(std::mem::size_of(self)())
+            std::mem::size_of::<f32>()
         }
         #[inline]
         pub fn alignment(&self) -> usize {
@@ -219,18 +174,11 @@ mod datum {
             }
         };
     }
-    datum!(bool, Bool);
-    datum!(f16, F16);
     datum!(f32, F32);
-    datum!(f64, F64);
     datum!(i8, I8);
     datum!(i16, I16);
     datum!(i32, I32);
     datum!(i64, I64);
-    datum!(u8, U8);
-    datum!(u16, U16);
-    datum!(u32, U32);
-    datum!(u64, U64);
     datum!(TDim, TDim);
     datum!(String, String);
     datum!(Blob, Blob);
@@ -239,66 +187,19 @@ mod dim {
     use num_traits::Zero;
     use std::fmt;
     use std::ops;
-    mod parse {
-        use super::*;
-        use nom::branch::alt;
-        use nom::bytes::complete::tag;
-        use nom::character::complete::{alpha1, alphanumeric1, digit1};
-        use nom::combinator::{all_consuming, map, map_res, recognize};
-        use nom::multi::many0;
-        use nom::sequence::{delimited, pair, separated_pair};
-        use nom::IResult;
-        pub fn parse_tdim(symbol_table: &SymbolTable, input: &str) -> TractResult<TDim> {
-            unimplemented!()
-        }
-        fn expr<'i>(symbol_table: &SymbolTable, i: &'i str) -> IResult<&'i str, TDim> {
-            unimplemented!()
-        }
-        macro_rules! bin {
-            ($ name : ident , $ next : ident , $ op : expr , $ builder : expr) => {
-                fn $name<'i>(symbol_table: &SymbolTable, input: &'i str) -> IResult<&'i str, TDim> {
-                    let s = symbol_table;
-                    alt((
-                        map(
-                            separated_pair(|i| $next(s, i), tag($op), |i| $next(s, i)),
-                            $builder,
-                        ),
-                        |i| $next(s, i),
-                    ))(input)
-                }
-            };
-        }
-        bin!(add, sub, "+", |(a, b)| a + b);
-        bin!(sub, mul, "-", |(a, b)| a - b);
-        bin!(mul, div, "*", |(a, b)| a * b);
-        fn div<'i>(symbol_table: &SymbolTable, input: &'i str) -> IResult<&'i str, TDim> {
-            unimplemented!()
-        }
-        fn atom<'i>(symbol_table: &SymbolTable, i: &'i str) -> IResult<&'i str, TDim> {
-            unimplemented!()
-        }
-        fn identifier<'i>(symbol_table: &SymbolTable, i: &'i str) -> IResult<&'i str, Symbol> {
-            unimplemented!()
-        }
-        fn numeric(i: &str) -> IResult<&str, i64> {
-            unimplemented!()
-        }
-    }
     mod sym {
         use itertools::Itertools;
         use std::fmt;
         use std::sync::{Arc, Mutex, Weak};
-        use string_interner::StringInterner;
-        use string_interner::Symbol as _;
         #[derive(Clone, Default)]
-        pub struct SymbolTable(Arc<Mutex<StringInterner>>);
+        pub struct SymbolTable;
         impl SymbolTable {
             pub fn sym(&self, name: &str) -> Symbol {
                 unimplemented!()
             }
         }
         #[derive(Clone)]
-        pub struct Symbol(Weak<Mutex<StringInterner>>, string_interner::DefaultSymbol);
+        pub struct Symbol(Weak<Mutex<()>>, char);
         impl PartialEq for Symbol {
             fn eq(&self, other: &Self) -> bool {
                 unimplemented!()
@@ -548,7 +449,6 @@ mod dim {
             }
         }
     }
-    pub use self::parse::parse_tdim;
     pub use self::sym::{Symbol, SymbolTable, SymbolValues};
     pub use self::tree::{TDim, UndeterminedSymbol};
     use crate::{TractError, TractResult};
@@ -652,8 +552,6 @@ mod scatter {
 mod tensor {
     use crate::datum::{round_ties_to_even, scale_by, Blob, ClampCast, Datum, DatumType, QParams};
     use crate::dim::TDim;
-    use crate::TVec;
-    use half::f16;
     use itertools::Itertools;
     use ndarray::prelude::*;
     use std::alloc;
@@ -668,15 +566,6 @@ mod tensor {
         use crate::datum::Datum;
         use ndarray::*;
         use std::sync::Arc;
-        pub fn arr4<A, V, U, T>(xs: &[V]) -> Array4<A>
-        where
-            V: FixedInitializer<Elem = U> + Clone,
-            U: FixedInitializer<Elem = T> + Clone,
-            T: FixedInitializer<Elem = A> + Clone,
-            A: Clone,
-        {
-            unimplemented!()
-        }
         pub fn tensor0<A: Datum>(x: A) -> Tensor {
             Tensor::from(arr0(x))
         }
@@ -687,16 +576,11 @@ mod tensor {
         Close,
         Approximate,
     }
-    impl Approximation {
-        fn atol_and_rtol(&self, dt: &DatumType) -> (f64, f64) {
-            unimplemented!()
-        }
-    }
     #[derive(Eq)]
     pub struct Tensor {
         dt: DatumType,
-        shape: TVec<usize>,
-        strides: TVec<isize>,
+        shape: Vec<usize>,
+        strides: Vec<isize>,
         len: usize,
         layout: alloc::Layout,
         data: *mut u8,
@@ -744,7 +628,7 @@ mod tensor {
                 ptr
             } as *mut u8;
             let mut tensor = Tensor {
-                strides: tvec!(),
+                strides: vec!(),
                 layout,
                 dt,
                 shape: shape.into(),
@@ -791,14 +675,6 @@ mod tensor {
                 Ok(tensor)
             }
         }
-        pub unsafe fn from_raw_dt_align(
-            dt: DatumType,
-            shape: &[usize],
-            content: &[u8],
-            align: usize,
-        ) -> anyhow::Result<Tensor> {
-            unimplemented!()
-        }
         #[inline]
         pub fn rank(&self) -> usize {
             self.shape.len()
@@ -812,10 +688,6 @@ mod tensor {
         pub fn len(&self) -> usize {
             self.len
         }
-        #[inline]
-        pub fn strides(&self) -> &[isize] {
-            unimplemented!()
-        }
         fn update_strides_and_len(&mut self) {
             self.strides.clear();
             compute_natural_stride_to(&mut self.strides, &self.shape);
@@ -825,22 +697,6 @@ mod tensor {
                 unsafe { *self.strides.get_unchecked(0) as usize * self.shape.get_unchecked(0) }
             }
         }
-        pub unsafe fn set_shape_unchecked(&mut self, shape: &[usize]) {
-            unimplemented!()
-        }
-        pub fn set_shape(&mut self, shape: &[usize]) -> anyhow::Result<()> {
-            unimplemented!()
-        }
-        pub fn permute_axes(self, axes: &[usize]) -> anyhow::Result<Tensor> {
-            unimplemented!()
-        }
-        fn clip_range_bounds(
-            &self,
-            axis: usize,
-            range: impl std::ops::RangeBounds<usize>,
-        ) -> Range<usize> {
-            unimplemented!()
-        }
         #[inline]
         pub fn datum_type(&self) -> DatumType {
             self.dt
@@ -849,36 +705,18 @@ mod tensor {
         pub unsafe fn set_datum_type(&mut self, dt: DatumType) {
             self.dt = dt
         }
-        pub fn dump(&self, force_full: bool) -> anyhow::Result<String> {
-            unimplemented!()
-        }
-        pub unsafe fn into_array_unchecked<D: Datum>(self) -> ArrayD<D> {
-            unimplemented!()
-        }
         fn check_for_access<D: Datum>(&self) -> anyhow::Result<()> {
             if self.datum_type().unquantized() != D::datum_type().unquantized() {
                 unimplemented!()
             }
             Ok(())
         }
-        pub fn to_array_view<D: Datum>(&self) -> anyhow::Result<ArrayViewD<D>> {
-            unimplemented!()
-        }
-        pub unsafe fn to_array_view_unchecked<D: Datum>(&self) -> ArrayViewD<D> {
-            unimplemented!()
-        }
         pub fn as_ptr<D: Datum>(&self) -> anyhow::Result<*const D> {
             self.check_for_access::<D>()?;
             Ok(self.data as *const D)
         }
-        pub unsafe fn as_ptr_mut_unchecked<D: Datum>(&mut self) -> *mut D {
-            unimplemented!()
-        }
         pub fn as_ptr_mut<D: Datum>(&mut self) -> anyhow::Result<*mut D> {
             self.as_ptr::<D>().map(|p| p as *mut D)
-        }
-        pub fn as_slice<D: Datum>(&self) -> anyhow::Result<&[D]> {
-            unimplemented!()
         }
         pub fn as_slice_mut<D: Datum>(&mut self) -> anyhow::Result<&mut [D]> {
             let ptr: *mut D = self.as_ptr_mut()?;
@@ -902,15 +740,6 @@ mod tensor {
                 std::slice::from_raw_parts_mut::<D>(self.data as *mut D, self.len())
             }
         }
-        pub fn to_scalar<D: Datum>(&self) -> anyhow::Result<&D> {
-            unimplemented!()
-        }
-        pub unsafe fn to_scalar_unchecked<D: Datum>(&self) -> &D {
-            unimplemented!()
-        }
-        pub unsafe fn as_bytes_mut(&mut self) -> &mut [u8] {
-            unimplemented!()
-        }
         unsafe fn is_uniform_t<T: Datum>(&self) -> bool {
             let slice = self.as_slice_unchecked::<T>();
             slice[1..].iter().all(|x| x == &slice[0])
@@ -919,7 +748,7 @@ mod tensor {
             if self.len() <= 1 {
                 unimplemented!()
             }
-            unsafe { dispatch_datum!(Tensor::is_uniform_t(self.datum_type())(self)) }
+            unsafe { Tensor::is_uniform_t::<f32>(self) }
         }
         unsafe fn as_uniform_t<T: Datum>(&self) -> Tensor {
             let v: T = self.as_slice_unchecked::<T>()[0].clone();
@@ -928,43 +757,13 @@ mod tensor {
         pub fn as_uniform(&self) -> Option<Tensor> {
             if self.len() >= 1 && self.is_uniform() {
                 unsafe {
-                    let mut t = dispatch_datum!(Tensor::as_uniform_t(self.datum_type())(self));
+                    let mut t = Tensor::as_uniform_t::<f32>(self);
                     t.set_datum_type(self.datum_type());
                     Some(t)
                 }
             } else {
                 unimplemented!()
             }
-        }
-        unsafe fn natural_cast<
-            Source: Datum + num_traits::AsPrimitive<Target>,
-            Target: Datum + Copy,
-        >(
-            &self,
-            other: &mut Tensor,
-        ) {
-            unimplemented!()
-        }
-        unsafe fn cast_number_to_bool<Source: Datum + num_traits::Zero>(&self, other: &mut Tensor) {
-            unimplemented!()
-        }
-        unsafe fn cast_from_string<Target: Datum + core::str::FromStr>(
-            &self,
-            other: &mut Tensor,
-        ) -> anyhow::Result<()> {
-            unimplemented!()
-        }
-        unsafe fn cast_to_string<Source: Datum>(&self, other: &mut Tensor) {
-            unimplemented!()
-        }
-        pub fn cast_to<D: Datum>(&self) -> anyhow::Result<Cow<Tensor>> {
-            unimplemented!()
-        }
-        pub fn cast_to_dt(&self, dst_dt: DatumType) -> anyhow::Result<Cow<Tensor>> {
-            unimplemented!()
-        }
-        fn eq_dt(&self, other: &Tensor) -> anyhow::Result<bool> {
-            unimplemented!()
         }
         fn from_datum<T: Datum>(it: ArrayD<T>) -> Tensor {
             if it.as_slice().is_some() {
@@ -979,16 +778,13 @@ mod tensor {
                     shape,
                     layout,
                     data,
-                    strides: tvec!(),
+                    strides: vec!(),
                     len: 0,
                 };
                 t.update_strides_and_len();
                 return t;
             }
             unsafe { unimplemented!() }
-        }
-        pub fn deep_clone(&self) -> Tensor {
-            unimplemented!()
         }
     }
     impl PartialEq for Tensor {
@@ -1001,10 +797,7 @@ mod tensor {
             unimplemented!()
         }
     }
-    pub fn natural_strides(shape: &[usize]) -> TVec<isize> {
-        unimplemented!()
-    }
-    fn compute_natural_stride_to(strides: &mut TVec<isize>, shape: &[usize]) {
+    fn compute_natural_stride_to(strides: &mut Vec<isize>, shape: &[usize]) {
         match shape.len() {
             0 => (),
             1 => strides.push(1),
