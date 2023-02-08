@@ -15,7 +15,6 @@ rust-version = "1.65"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-downcast-rs.workspace = true
 dyn-clone.workspace = true
 anyhow.workspace = true
 ndarray.workspace = true

@@ -21,13 +21,13 @@ impl Tensor {
         Arc::new(self)
     }
 }
-#[macro_use]
-pub extern crate downcast_rs;
-use downcast_rs::Downcast;
 use std::sync::Arc;
 macro_rules! as_op {
     () => {
         fn as_op(&self) -> &dyn Op {
+            self
+        }
+        fn as_any(&self) -> &dyn Any {
             self
         }
     };
@@ -178,9 +178,11 @@ impl TypedOp for TypedSource {
     }
     as_op!();
 }
-pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {}
-pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
+use std::any::Any;
+pub trait Op: dyn_clone::DynClone + Send + Sync + 'static {}
+pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static {
     fn as_op(&self) -> &dyn Op;
+    fn as_any(&self) -> &dyn Any;
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>>;
     #[allow(unused_variables)]
     fn declutter(
@@ -199,7 +201,6 @@ pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         unimplemented!()
     }
 }
-impl_downcast!(Op);
 dyn_clone::clone_trait_object!(TypedOp);
 impl<O: TypedOp> From<O> for Box<dyn TypedOp> {
     fn from(it: O) -> Box<dyn TypedOp> {
@@ -304,7 +305,6 @@ where
     pub nodes: Vec<Node<F, O>>,
     pub inputs: Vec<OutletId>,
     pub outputs: Vec<OutletId>,
-    pub outlet_labels: HashMap<OutletId, String>,
 }
 impl<F, O> Default for Graph<F, O>
 where
@@ -316,7 +316,6 @@ where
             nodes: vec![],
             inputs: vec![],
             outputs: vec![],
-            outlet_labels: HashMap::new(),
         }
     }
 }
@@ -371,7 +370,6 @@ where
             prec.outputs[outlet.slot].successors.push(inlet);
         }
         let succ = &mut self.nodes[inlet.node];
-        #[allow(clippy::comparison_chain)]
         if inlet.slot == succ.inputs.len() {
             succ.inputs.push(outlet);
         }
@@ -390,15 +388,6 @@ where
     pub fn set_output_outlets(&mut self, outputs: &[OutletId]) -> TractResult<()> {
         self.outputs = outputs.to_vec();
         Ok(())
-    }
-    pub fn node(&self, id: usize) -> &Node<F, O> {
-        &self.nodes[id]
-    }
-    pub fn node_mut(&mut self, id: usize) -> &mut Node<F, O> {
-        &mut self.nodes[id]
-    }
-    pub fn nodes(&self) -> &[Node<F, O>] {
-        &self.nodes
     }
     pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
         let outlets = &self.nodes[outlet.node].outputs;
@@ -486,7 +475,7 @@ where
         .iter()
         .map(|n| n.node)
         .collect::<Vec<usize>>();
-    eval_order_for_nodes(model.nodes(), &inputs, &targets, &[])
+    eval_order_for_nodes(&model.nodes, &inputs, &targets, &[])
 }
 pub fn eval_order_for_nodes<F, O>(
     nodes: &[Node<F, O>],
@@ -691,7 +680,7 @@ where
             }
         }
         for node in obliterate {
-            target.node_mut(node).op = target.create_dummy();
+            target.nodes[node].op = target.create_dummy();
         }
         target.set_input_outlets(&model_input_outlets)?;
         Ok(())
@@ -721,7 +710,7 @@ where
         let mut target = Graph::default();
         let mut mapping = HashMap::new();
         for old_id in source.eval_order()? {
-            let node = source.node(old_id);
+            let node = &source.nodes[old_id];
             let outlets = self.translate_node(source, node, &mut target, &mapping)?;
             for (ix, outlet) in outlets.into_iter().enumerate() {
                 mapping.insert(OutletId::new(node.id, ix), outlet);
@@ -799,7 +788,7 @@ pub type TypedNode = Node<TypedFact, Box<dyn TypedOp>>;
 pub type TypedModelPatch = ModelPatch<TypedFact, Box<dyn TypedOp>>;
 impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
     fn is_source(op: &Box<dyn TypedOp>) -> bool {
-        op.as_op().downcast_ref::<TypedSource>().is_some()
+        op.as_any().downcast_ref::<TypedSource>().is_some()
     }
     fn create_dummy(&self) -> Box<dyn TypedOp> {
         Box::new(Dummy::default())
@@ -831,7 +820,7 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
                 .enumerate()
                 .try_for_each(|(ix, i)| self.add_edge(*i, InletId { node: id, slot: ix }))?;
             TractResult::Ok(
-                self.node(id)
+                self.nodes[id]
                     .outputs
                     .iter()
                     .enumerate()
@@ -852,18 +841,18 @@ fn crasher_monterey_matmul() {
     let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
     let patch = model
-        .node(wire.node)
+        .nodes[wire.node]
         .op
-        .declutter(&model, model.node(wire.node))
+        .declutter(&model, &model.nodes[wire.node])
         .unwrap()
         .unwrap();
     patch.apply(&mut model).unwrap();
     model.compact().unwrap();
     let wire = model.outputs[0];
     let patch = model
-        .node(wire.node)
+        .nodes[wire.node]
         .op
-        .codegen(&model, model.node(wire.node))
+        .codegen(&model, &model.nodes[wire.node])
         .unwrap()
         .unwrap();
 }
