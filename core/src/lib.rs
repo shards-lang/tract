@@ -408,7 +408,6 @@ mod broadcast {
 pub mod model {
     mod fact {
         use crate::internal::*;
-        use downcast_rs::Downcast;
         #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
             dims: TVec<TDim>,
@@ -439,9 +438,6 @@ pub mod model {
                 dims.compute_concrete();
                 dims
             }
-            pub fn compatible_with(&self, _other: &ShapeFact) -> bool {
-                unimplemented!()
-            }
         }
         impl std::ops::Deref for ShapeFact {
             type Target = [TDim];
@@ -454,12 +450,6 @@ pub mod model {
                 ShapeFact::from_dims(it)
             }
         }
-        pub trait Fact: Downcast + dyn_clone::DynClone + Send + Sync + 'static {
-            fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>>;
-            fn compatible_with(&self, _other: &dyn Fact) -> bool;
-            fn datum_type(&self) -> Option<DatumType>;
-        }
-        impl_downcast!(Fact);
         #[derive(Clone, PartialEq, Eq)]
         pub struct TypedFact {
             pub datum_type: DatumType,
@@ -487,38 +477,7 @@ pub mod model {
                 }
             }
             pub fn rank(&self) -> usize {
-                if cfg!(debug_assertions) {
-                    self.consistent().unwrap();
-                }
                 self.shape.rank()
-            }
-            pub fn consistent(&self) -> TractResult<()> {
-                if let Some(u) = &self.uniform {
-                    if self.datum_type != u.datum_type() {
-                        unimplemented!()
-                    }
-                }
-                if let (Some(u), Some(k)) = (self.uniform.as_deref(), self.konst.as_deref()) {
-                    if let Some(k) = k.as_uniform() {
-                        if &k != u {
-                            unimplemented!()
-                        }
-                    } else {
-                        unimplemented!()
-                    }
-                }
-                Ok(())
-            }
-        }
-        impl Fact for TypedFact {
-            fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>> {
-                unimplemented!()
-            }
-            fn compatible_with(&self, other: &dyn Fact) -> bool {
-                unimplemented!()
-            }
-            fn datum_type(&self) -> Option<DatumType> {
-                unimplemented!()
             }
         }
         impl From<Arc<Tensor>> for TypedFact {
@@ -589,7 +548,7 @@ pub mod model {
         #[derive(Clone)]
         pub struct Graph<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub nodes: Vec<Node<F, O>>,
@@ -601,7 +560,7 @@ pub mod model {
         }
         impl<F, O> Default for Graph<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn default() -> Graph<F, O> {
@@ -617,7 +576,7 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             Graph<F, O>: SpecialOps<F, O>,
         {
@@ -635,7 +594,7 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub fn add_node(
@@ -707,9 +666,9 @@ pub mod model {
                 eval_order(self)
             }
         }
-        impl<F: Fact + Clone + 'static, O> Graph<F, O>
+        impl<F: Clone + 'static, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static + From<std::sync::Arc<Tensor>>,
+            F: Clone + 'static + From<std::sync::Arc<Tensor>>,
             O: From<crate::ops::konst::Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub fn add_const(
@@ -726,7 +685,7 @@ pub mod model {
         }
         impl<F, O> Graph<F, O>
         where
-            F: Fact + Clone + 'static + for<'a> std::convert::From<&'a F>,
+            F: Clone + 'static + for<'a> std::convert::From<&'a F>,
             O: Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
@@ -746,7 +705,7 @@ pub mod model {
     mod node {
         use crate::internal::*;
         #[derive(Clone)]
-        pub struct Node<F: Fact, O> {
+        pub struct Node<F, O> {
             pub id: usize,
             pub name: String,
             pub inputs: Vec<OutletId>,
@@ -755,7 +714,7 @@ pub mod model {
             pub outputs: TVec<Outlet<F>>,
         }
         #[derive(Clone, Default)]
-        pub struct Outlet<F: Fact> {
+        pub struct Outlet<F> {
             pub fact: F,
             pub successors: TVec<InletId>,
         }
@@ -789,7 +748,7 @@ pub mod model {
         use crate::internal::*;
         pub fn eval_order<F, O>(model: &super::Graph<F, O>) -> TractResult<Vec<usize>>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             let inputs = model
@@ -811,7 +770,7 @@ pub mod model {
             more_dependencies: &[(usize, usize)],
         ) -> TractResult<Vec<usize>>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             let mut done = std::collections::HashSet::new();
@@ -875,7 +834,7 @@ pub mod model {
         #[derive(Clone)]
         pub struct ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub dont_apply_twice: Option<String>,
@@ -887,7 +846,7 @@ pub mod model {
         }
         impl<F, O> Default for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn default() -> ModelPatch<F, O> {
@@ -903,7 +862,7 @@ pub mod model {
         }
         impl<F, O> Deref for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             type Target = Graph<F, O>;
@@ -913,7 +872,7 @@ pub mod model {
         }
         impl<F, O> DerefMut for ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn deref_mut(&mut self) -> &mut Graph<F, O> {
@@ -922,7 +881,7 @@ pub mod model {
         }
         impl<F, O> ModelPatch<F, O>
         where
-            F: Fact + Clone + 'static,
+            F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             Graph<F, O>: SpecialOps<F, O>,
         {
@@ -1035,8 +994,8 @@ pub mod model {
         use crate::internal::*;
         pub trait Translate<TI1, O1, TI2, O2>
         where
-            TI1: Fact + Clone + 'static,
-            TI2: Fact + Clone + 'static,
+            TI1: Clone + 'static,
+            TI2: Clone + 'static,
             O1: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             O2: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
@@ -1078,8 +1037,8 @@ pub mod model {
         impl<TI1, O1, TI2, O2, EO, ETI> Translate<TI1, O1, TI2, O2> for IntoTranslator
         where
             TractError: From<EO> + From<ETI>,
-            TI1: Fact + Clone + 'static,
-            TI2: Fact + for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
+            TI1: Clone + 'static,
+            TI2: for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
             O1: Clone + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
             O2: for<'a> TryFrom<&'a O1, Error = ETI>
                 + AsRef<dyn Op>
@@ -1363,7 +1322,6 @@ pub mod optim {
 pub mod value {
     use crate::internal::*;
     use std::rc::Rc;
-    use TValue::*;
     #[derive(Clone, PartialEq, Eq)]
     pub enum TValue {
         Const(Arc<Tensor>),
