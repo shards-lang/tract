@@ -4,14 +4,8 @@
 #[macro_use]
 pub extern crate downcast_rs;
 #[macro_use]
-extern crate educe;
-#[allow(unused_imports)]
-#[macro_use]
-extern crate log;
-#[macro_use]
 pub mod ops {
     use downcast_rs::Downcast;
-    use std::fmt;
     #[macro_use]
     pub mod macros {
         #[macro_export]
@@ -423,9 +417,7 @@ pub mod ops {
         }
         fn is_stateless(&self) -> bool;
     }
-    pub trait Op:
-         dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp
-    {
+    pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp {
         fn same_as(&self, _other: &dyn Op) -> bool {
             false
         }
@@ -515,7 +507,6 @@ pub mod model {
     mod fact {
         use crate::internal::*;
         use downcast_rs::Downcast;
-        use std::fmt;
         #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
             dims: TVec<TDim>,
@@ -572,9 +563,7 @@ pub mod model {
                 ShapeFact::from_dims(it)
             }
         }
-        pub trait Fact:
-            Downcast + dyn_clone::DynClone + Send + Sync + 'static
-        {
+        pub trait Fact: Downcast + dyn_clone::DynClone + Send + Sync + 'static {
             fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>>;
             fn matches(&self, t: &Tensor, symbols: Option<&SymbolValues>) -> TractResult<bool> {
                 unimplemented!()
@@ -679,16 +668,6 @@ pub mod model {
                 unimplemented!()
             }
         }
-        impl From<Tensor> for TypedFact {
-            fn from(t: Tensor) -> TypedFact {
-                unimplemented!()
-            }
-        }
-        impl<'t> From<&'t Tensor> for TypedFact {
-            fn from(t: &'t Tensor) -> TypedFact {
-                unimplemented!()
-            }
-        }
         impl From<Arc<Tensor>> for TypedFact {
             fn from(t: Arc<Tensor>) -> TypedFact {
                 TypedFact {
@@ -743,7 +722,6 @@ pub mod model {
     }
     mod graph {
         use crate::internal::*;
-        use std::fmt;
         pub trait SpecialOps<F, O> {
             fn create_dummy(&self) -> O;
             fn create_source(&self, fact: F) -> O;
@@ -771,7 +749,7 @@ pub mod model {
         impl<F, O> Default for Graph<F, O>
         where
             F: Fact + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn default() -> Graph<F, O> {
                 Graph {
@@ -805,7 +783,7 @@ pub mod model {
         impl<F, O> Graph<F, O>
         where
             F: Fact + Clone + 'static,
-            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static
+            O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub fn add_node(
                 &mut self,
@@ -892,19 +870,11 @@ pub mod model {
             pub fn eval_order(&self) -> TractResult<Vec<usize>> {
                 eval_order(self)
             }
-            pub fn outlet_successors(&self, outlet: OutletId) -> &[InletId] {
-                unimplemented!()
-            }
         }
         impl<F: Fact + Clone + 'static, O> Graph<F, O>
         where
             F: Fact + Clone + 'static + From<std::sync::Arc<Tensor>>,
-            O: 
-                 From<crate::ops::konst::Const>
-                + AsRef<dyn Op>
-                + AsMut<dyn Op>
-                + Clone
-                + 'static,
+            O: From<crate::ops::konst::Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub fn add_const(
                 &mut self,
@@ -921,8 +891,7 @@ pub mod model {
         impl<F, O> Graph<F, O>
         where
             F: Fact + Clone + 'static + for<'a> std::convert::From<&'a F>,
-            O:
-                 Clone
+            O: Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
@@ -940,7 +909,6 @@ pub mod model {
     }
     mod node {
         use crate::internal::*;
-        use std::fmt;
         #[derive(Clone)]
         pub struct Node<F: Fact, O> {
             pub id: usize,
@@ -1282,13 +1250,12 @@ pub mod model {
     }
     pub mod translator {
         use crate::internal::*;
-        use std::fmt;
         pub trait Translate<TI1, O1, TI2, O2>
         where
             TI1: Fact + Clone + 'static,
             TI2: Fact + Clone + 'static,
-            O1:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
-            O2:  AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+            O1: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+            O2: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             fn translate_node(
                 &self,
@@ -1338,19 +1305,11 @@ pub mod model {
             TractError: From<EO> + From<ETI>,
             TI1: Fact + Clone + 'static,
             TI2: Fact + for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
-            O1:
-                Clone
+            O1: Clone + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+            O2: for<'a> TryFrom<&'a O1, Error = ETI>
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
-                + 'static
-               ,
-            O2:
-                 for<'a> TryFrom<&'a O1, Error = ETI>
-                + AsRef<dyn Op>
-                + AsMut<dyn Op>
-                + Clone
-               
                 + 'static,
             Graph<TI2, O2>: SpecialOps<TI2, O2>,
         {
@@ -1488,7 +1447,6 @@ pub mod model {
 pub mod optim {
     use crate::internal::*;
     use std::collections::HashSet;
-    use tract_itertools::Itertools;
     mod op_optim {
         use super::OptimizerSession;
         use crate::internal::*;
@@ -1708,7 +1666,6 @@ pub mod internal {
     pub use crate::prelude::*;
     pub use std::borrow::Cow;
     pub use std::collections::HashMap;
-    pub use std::hash::Hash;
     pub use tract_data::internal::*;
 }
 #[test]

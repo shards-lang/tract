@@ -17,7 +17,5 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 downcast-rs.workspace = true
 dyn-clone.workspace = true
-educe.workspace = true
-log.workspace = true
 ndarray.workspace = true
 tract-data = { version = "=0.19.3-pre", path = "../data" }
