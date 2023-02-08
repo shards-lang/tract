@@ -158,8 +158,8 @@ impl TypedOp for MatMulUnary {
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        let _patch = self.new_mat_mul_unary_finite(model, node)?;
-        Ok(None)
+        let patch = self.new_mat_mul_unary_finite(model, node)?;
+        Ok(Some(patch))
     }
     as_op!();
 }
