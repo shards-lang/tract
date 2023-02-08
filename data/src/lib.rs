@@ -24,16 +24,8 @@ impl Tensor {
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
-    #[inline]
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        unimplemented!()
-    }
     pub fn as_slice_unchecked(&self) -> &[f32] {
         &self.data
-    }
-    fn is_uniform_t(&self) -> bool {
-        unimplemented!()
     }
     fn as_uniform_t(&self) -> Tensor {
         let v = self.as_slice_unchecked()[0].clone();
@@ -229,7 +221,7 @@ pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        Ok(None)
+        unimplemented!()
     }
     #[allow(unused_variables)]
     fn codegen(
@@ -237,10 +229,6 @@ pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        Ok(None)
-    }
-    #[allow(unused_variables)]
-    fn nested_model_multipliers(&self, inputs: &[&TypedFact]) -> Vec<(Cow<str>, f64)> {
         unimplemented!()
     }
 }
@@ -277,18 +265,12 @@ pub fn multi_broadcast(_shapes: &[impl AsRef<[usize]>]) -> Option<Vec<usize>> {
 #[derive(Clone, PartialEq, Eq)]
 pub struct ShapeFact {
     dims: Vec<usize>,
-    concrete: Option<Vec<usize>>,
 }
 impl ShapeFact {
-    fn compute_concrete(&mut self) {
-        self.concrete = Some(self.dims.clone())
-    }
     pub fn from_dims<T: IntoIterator<Item = usize>>(it: T) -> ShapeFact {
         let mut dims = ShapeFact {
             dims: it.into_iter().collect(),
-            concrete: None,
         };
-        dims.compute_concrete();
         dims
     }
 }
@@ -307,7 +289,6 @@ impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
 pub struct TypedFact {
     pub shape: ShapeFact,
     pub konst: Option<Arc<Tensor>>,
-    pub uniform: Option<Arc<Tensor>>,
 }
 impl TypedFact {
     pub fn dt_shape<S>(shape: S) -> TypedFact
@@ -317,7 +298,6 @@ impl TypedFact {
         TypedFact {
             shape: shape.into(),
             konst: None,
-            uniform: None,
         }
     }
 }
@@ -325,7 +305,6 @@ impl From<Arc<Tensor>> for TypedFact {
     fn from(t: Arc<Tensor>) -> TypedFact {
         TypedFact {
             shape: ShapeFact::from_dims(t.shape().to_vec()),
-            uniform: t.as_uniform().map(Arc::new),
             konst: Some(t),
         }
     }
@@ -917,10 +896,19 @@ fn crasher_monterey_matmul() {
         .unwrap();
     let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
-    let patch = model.node(wire.node).op.declutter(&model, model.node(wire.node)).unwrap().unwrap();
+    let patch = model
+        .node(wire.node)
+        .op
+        .declutter(&model, model.node(wire.node))
+        .unwrap()
+        .unwrap();
     patch.apply(&mut model).unwrap();
     model.compact().unwrap();
-
     let wire = model.outputs[0];
-    let patch = model.node(wire.node).op.codegen(&model, model.node(wire.node)).unwrap().unwrap();
+    let patch = model
+        .node(wire.node)
+        .op
+        .codegen(&model, model.node(wire.node))
+        .unwrap()
+        .unwrap();
 }
