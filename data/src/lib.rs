@@ -3,55 +3,29 @@
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 pub mod prelude {
-    pub use crate::datum::{round_ties_to_even, Blob, Datum, DatumType, QParams};
-    pub use crate::dim::{Symbol, SymbolTable, SymbolValues, TDim, ToDim};
+    pub use crate::datum::{Datum, DatumType};
     pub use crate::tensor::{IntoArcTensor, IntoTensor, Tensor};
     pub use crate::{TractError, TractResult};
 }
 pub mod internal {
-    pub use crate::dim::DimLike;
     pub use crate::prelude::*;
 }
 mod datum {
-    use crate::dim::TDim;
     use crate::tensor::litteral::*;
     use crate::tensor::Tensor;
     use num_traits::AsPrimitive;
     use std::hash::Hash;
     use std::{fmt, ops};
-    #[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
-    pub struct Blob(pub Vec<u8>);
-    impl fmt::Display for Blob {
-        fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-            unimplemented!()
-        }
-    }
-    #[derive(Copy, Clone, PartialEq)]
-    pub enum QParams {
-        MinMax { min: f32, max: f32 },
-        ZpScale { zero_point: i32, scale: f32 },
-    }
-    impl Eq for QParams {}
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
     pub enum DatumType {
-        I8,
-        I16,
-        I32,
-        I64,
         F32,
-        TDim,
-        Blob,
-        String,
     }
     impl DatumType {
         pub fn is_unsigned(&self) -> bool {
             false
         }
         pub fn is_signed(&self) -> bool {
-            matches!(
-                self.unquantized(),
-                DatumType::I8 | DatumType::I16 | DatumType::I32 | DatumType::I64
-            )
+		false
         }
         pub fn is_float(&self) -> bool {
             matches!(self, DatumType::F32)
@@ -71,21 +45,9 @@ mod datum {
         #[inline]
         pub fn alignment(&self) -> usize {
             match self {
-                DatumType::TDim => std::mem::size_of::<usize>(),
-                DatumType::String => std::mem::size_of::<usize>(),
                 _ => self.size_of(),
             }
         }
-    }
-    pub fn round_ties_to_even(x: f32) -> f32 {
-        unimplemented!()
-    }
-    #[inline]
-    pub fn scale_by<T: Datum + AsPrimitive<f32>>(b: T, a: f32) -> T
-    where
-        f32: AsPrimitive<T>,
-    {
-        unimplemented!()
     }
     pub trait ClampCast: PartialOrd + Copy + 'static {
         #[inline(always)]
@@ -121,258 +83,9 @@ mod datum {
         };
     }
     datum!(f32, F32);
-    datum!(TDim, TDim);
-    datum!(String, String);
-    datum!(Blob, Blob);
-}
-mod dim {
-    use std::fmt;
-    use std::ops;
-    mod sym {
-        use std::fmt;
-        use std::sync::{Arc, Mutex, Weak};
-        #[derive(Clone, Default)]
-        pub struct SymbolTable;
-        #[derive(Clone)]
-        pub struct Symbol(Weak<Mutex<()>>, char);
-        impl PartialEq for Symbol {
-            fn eq(&self, other: &Self) -> bool {
-                unimplemented!()
-            }
-        }
-        impl Eq for Symbol {}
-        impl PartialOrd for Symbol {
-            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                unimplemented!()
-            }
-        }
-        impl Ord for Symbol {
-            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                unimplemented!()
-            }
-        }
-        impl std::hash::Hash for Symbol {
-            fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-                unimplemented!()
-            }
-        }
-        impl fmt::Debug for Symbol {
-            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                unimplemented!()
-            }
-        }
-        #[derive(Clone, Debug, Default)]
-        pub struct SymbolValues(Vec<Option<i64>>);
-    }
-    mod tree {
-        use super::sym::*;
-        use num_traits::{AsPrimitive, PrimInt, Zero};
-        use std::{fmt, ops};
-        #[derive(Debug)]
-        pub struct UndeterminedSymbol(TDim);
-        impl std::fmt::Display for UndeterminedSymbol {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                unimplemented!()
-            }
-        }
-        #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Hash, Debug)]
-        pub enum TDim {
-            Sym(Symbol),
-            Val(i64),
-            Add(Vec<TDim>),
-            Mul(Vec<TDim>),
-            MulInt(i64, Box<TDim>),
-            Div(Box<TDim>, u64),
-        }
-        use TDim::*;
-        impl fmt::Display for TDim {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
-            }
-        }
-        impl TDim {
-            pub fn to_i64(&self) -> anyhow::Result<i64> {
-                if let Val(v) = self {
-                    Ok(*v)
-                } else {
-                    unimplemented!()
-                }
-            }
-        }
-        impl Zero for TDim {
-            fn zero() -> Self {
-                unimplemented!()
-            }
-            fn is_zero(&self) -> bool {
-                unimplemented!()
-            }
-        }
-        impl Default for TDim {
-            fn default() -> TDim {
-                unimplemented!()
-            }
-        }
-        impl ::std::iter::Sum for TDim {
-            fn sum<I: Iterator<Item = TDim>>(iter: I) -> TDim {
-                unimplemented!()
-            }
-        }
-        impl std::iter::Product for TDim {
-            fn product<I: Iterator<Item = TDim>>(iter: I) -> Self {
-                unimplemented!()
-            }
-        }
-        macro_rules! from_i {
-            ($ i : ty) => {
-                impl From<$i> for TDim {
-                    fn from(v: $i) -> TDim {
-                        TDim::Val(v as _)
-                    }
-                }
-                impl<'a> From<&'a $i> for TDim {
-                    fn from(v: &'a $i) -> TDim {
-                        TDim::Val(*v as _)
-                    }
-                }
-            };
-        }
-        from_i!(i32);
-        from_i!(usize);
-        impl<I> ops::Add<I> for TDim
-        where
-            I: Into<TDim>,
-        {
-            type Output = Self;
-            fn add(mut self, rhs: I) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<'a> ops::Add<&'a TDim> for TDim {
-            type Output = Self;
-            fn add(mut self, rhs: &'a TDim) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<I> ops::Sub<I> for TDim
-        where
-            I: Into<TDim>,
-        {
-            type Output = Self;
-            fn sub(mut self, rhs: I) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<'a> ops::Sub<&'a TDim> for TDim {
-            type Output = Self;
-            fn sub(mut self, rhs: &'a TDim) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<I: Into<TDim>> ops::Mul<I> for TDim {
-            type Output = Self;
-            fn mul(mut self, rhs: I) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<'a> ops::Mul<&'a TDim> for TDim {
-            type Output = Self;
-            fn mul(mut self, rhs: &'a TDim) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<I: AsPrimitive<u64> + PrimInt> ops::Div<I> for TDim {
-            type Output = Self;
-            fn div(mut self, rhs: I) -> Self {
-                unimplemented!()
-            }
-        }
-        impl<I: AsPrimitive<u64> + PrimInt> ops::Rem<I> for TDim {
-            type Output = Self;
-            fn rem(mut self, rhs: I) -> Self {
-                unimplemented!()
-            }
-        }
-    }
-    pub use self::sym::{Symbol, SymbolTable, SymbolValues};
-    pub use self::tree::{TDim, UndeterminedSymbol};
-    use crate::{TractError, TractResult};
-    pub trait DimLike:
-        Clone
-        + Default
-        + PartialEq
-        + From<usize>
-        + for<'a> std::convert::TryFrom<&'a TDim, Error = TractError>
-        + ::num_traits::Zero
-        + fmt::Debug
-        + fmt::Display
-        + std::hash::Hash
-        + ops::Add<Self, Output = Self>
-        + ops::Add<usize, Output = Self>
-        + for<'a> ops::Add<&'a Self, Output = Self>
-        + ops::Sub<Self, Output = Self>
-        + ops::Sub<usize, Output = Self>
-        + for<'a> ops::Sub<&'a Self, Output = Self>
-        + ops::Mul<Self, Output = Self>
-        + ops::Mul<usize, Output = Self>
-        + for<'a> ops::Mul<&'a Self, Output = Self>
-        + ops::Div<usize, Output = Self>
-        + ops::Rem<usize, Output = Self>
-        + Send
-        + Sync
-        + 'static
-        + std::iter::Sum
-        + std::iter::Product
-        + ToDim
-    {
-        fn maybe_div(&self, other: &Self) -> TractResult<(Self, u64)>;
-        fn divceil(&self, other: usize) -> Self {
-            unimplemented!()
-        }
-        fn to_i64(&self) -> TractResult<i64>;
-        fn to_usize(&self) -> TractResult<usize> {
-            self.to_i64().map(|d| d as usize)
-        }
-        fn to_isize(&self) -> TractResult<isize> {
-            self.to_i64().map(|d| d as isize)
-        }
-        fn to_i32(&self) -> TractResult<i32> {
-            unimplemented!()
-        }
-        fn one() -> Self;
-        fn eval(&self, values: &SymbolValues) -> Self;
-    }
-    impl DimLike for TDim {
-        fn maybe_div(&self, other: &Self) -> TractResult<(Self, u64)> {
-            unimplemented!()
-        }
-        fn to_i64(&self) -> TractResult<i64> {
-            TDim::to_i64(self)
-        }
-        fn one() -> Self {
-            unimplemented!()
-        }
-        fn eval(&self, values: &SymbolValues) -> Self {
-            unimplemented!()
-        }
-    }
-    impl<'a> std::convert::TryFrom<&'a TDim> for TDim {
-        type Error = anyhow::Error;
-        fn try_from(d: &'a TDim) -> TractResult<TDim> {
-            unimplemented!()
-        }
-    }
-    pub trait ToDim {
-        fn to_dim(&self) -> TDim;
-    }
-    impl<I: Into<TDim> + Clone> ToDim for I {
-        fn to_dim(&self) -> TDim {
-            self.clone().into()
-        }
-    }
 }
 mod tensor {
-    use crate::datum::{round_ties_to_even, scale_by, Blob, ClampCast, Datum, DatumType, QParams};
-    use crate::dim::TDim;
+    use crate::datum::{ClampCast, Datum, DatumType};
     use ndarray::prelude::*;
     use std::alloc;
     use std::fmt;
@@ -415,13 +128,6 @@ mod tensor {
             shape: &[usize],
             alignment: usize,
         ) -> anyhow::Result<Tensor> {
-            if dt == String::datum_type() {
-                unimplemented!()
-            } else if dt == Blob::datum_type() {
-                unimplemented!()
-            } else if dt == TDim::datum_type() {
-                unimplemented!()
-            }
             assert!(dt.is_copy());
             let bytes = shape.iter().cloned().product::<usize>() * dt.size_of();
             let layout = alloc::Layout::from_size_align(bytes, alignment)?;
@@ -441,17 +147,6 @@ mod tensor {
                 len: 0,
             };
             tensor.update_strides_and_len();
-            #[cfg(debug_assertions)]
-            if !data.is_null() {
-                if dt == DatumType::F32 {
-                    tensor
-                        .as_slice_mut_unchecked::<f32>()
-                        .iter_mut()
-                        .for_each(|f| *f = std::f32::NAN);
-                } else {
-                    unimplemented!()
-                }
-            }
             Ok(tensor)
         }
         pub fn clear<T: Datum + num_traits::Zero + Clone>(&mut self) -> anyhow::Result<()> {

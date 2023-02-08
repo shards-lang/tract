@@ -103,10 +103,7 @@ use std::sync::Arc;
                     let (_m, _k, _n, c_shape) = compute_shape(
                         &self
                             .a
-                            .shape()
-                            .iter()
-                            .map(|d| d.to_dim())
-                            .collect::<Vec<_>>(),
+                            .shape(),
                         &inputs[0].shape,
                     )?;
                     let c_dt = output_type(inputs[0].datum_type);
@@ -117,7 +114,7 @@ use std::sync::Arc;
                     model: &TypedModel,
                     node: &TypedNode,
                 ) -> TractResult<Option<TypedModelPatch>> {
-                    let patch = self.new_mat_mul_unary_finite(model, node)?;
+                    let _patch = self.new_mat_mul_unary_finite(model, node)?;
                     Ok(None)
                 }
                 as_op!();
@@ -142,7 +139,7 @@ use std::sync::Arc;
                     let op = LirMatMulUnary {
                         micro_ops: packed_as,
                     };
-                    wire = patch.wire_node(format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
+                    patch.wire_node(format!("{}.matmatmul", &*node.name), op, &[wire])?[0];
                     Ok(patch)
                 }
             }
@@ -158,15 +155,15 @@ use std::sync::Arc;
                 as_op!();
             }
             impl MatMatMulPack {
-                fn output_shape<D: DimLike>(&self, _input: &[D]) -> Vec<D> {
-                    vec!(1.into())
+                fn output_shape(&self, _input: &[usize]) -> Vec<usize> {
+                    vec!(1)
                 }
             }
-        pub fn compute_shape<D: DimLike>(
-            ashape: &[D],
-            bshape: &[D],
-        ) -> TractResult<(D, D, D, Vec<D>)> {
-            let a_shape_bc: Vec<D> = vec!();
+        pub fn compute_shape(
+            ashape: &[usize],
+            bshape: &[usize],
+        ) -> TractResult<(usize, usize, usize, Vec<usize>)> {
+            let a_shape_bc: Vec<usize> = vec!();
             let b_shape_bc = vec!();
             let mut c_shape = multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[0].clone(), ashape[1].clone());
@@ -248,33 +245,22 @@ use std::sync::Arc;
         Attr(Arc<Tensor>),
         Input(usize),
     }
-    pub fn multi_broadcast<D>(_shapes: &[impl AsRef<[D]>]) -> Option<Vec<D>>
-    where
-        D: DimLike,
+    pub fn multi_broadcast(_shapes: &[impl AsRef<[usize]>]) -> Option<Vec<usize>>
     {
         Some(vec!())
     }
         #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
-            dims: Vec<TDim>,
+            dims: Vec<usize>,
             concrete: Option<Vec<usize>>,
         }
         impl ShapeFact {
             fn compute_concrete(&mut self) {
-                assert!(self
-                    .dims
-                    .iter()
-                    .all(|d| d.to_isize().map(|d| d >= 0).unwrap_or(true)));
-                self.concrete = self
-                    .dims
-                    .iter()
-                    .map(|d| d.to_usize())
-                    .collect::<TractResult<Vec<_>>>()
-                    .ok()
+                self.concrete = Some(self.dims.clone())
             }
-            pub fn from_dims<D: ToDim, T: IntoIterator<Item = D>>(it: T) -> ShapeFact {
+            pub fn from_dims<T: IntoIterator<Item = usize>>(it: T) -> ShapeFact {
                 let mut dims = ShapeFact {
-                    dims: it.into_iter().map(|d| d.to_dim()).collect(),
+                    dims: it.into_iter().collect(),
                     concrete: None,
                 };
                 dims.compute_concrete();
@@ -282,12 +268,12 @@ use std::sync::Arc;
             }
         }
         impl std::ops::Deref for ShapeFact {
-            type Target = [TDim];
-            fn deref(&self) -> &[TDim] {
+            type Target = [usize];
+            fn deref(&self) -> &[usize] {
                 &self.dims
             }
         }
-        impl<D: ToDim, T: IntoIterator<Item = D>> From<T> for ShapeFact {
+        impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
             fn from(it: T) -> ShapeFact {
                 ShapeFact::from_dims(it)
             }
@@ -323,7 +309,7 @@ use std::sync::Arc;
             fn from(t: Arc<Tensor>) -> TypedFact {
                 TypedFact {
                     datum_type: t.datum_type(),
-                    shape: ShapeFact::from_dims(t.shape().iter().map(TDim::from)),
+                    shape: ShapeFact::from_dims(t.shape().to_vec()),
                     uniform: t.as_uniform().map(Arc::new),
                     konst: Some(t),
                 }
@@ -391,8 +377,6 @@ use std::sync::Arc;
             pub inputs: Vec<OutletId>,
             pub outputs: Vec<OutletId>,
             pub outlet_labels: HashMap<OutletId, String>,
-            pub properties: HashMap<String, Arc<Tensor>>,
-            pub symbol_table: SymbolTable,
         }
         impl<F, O> Default for Graph<F, O>
         where
@@ -405,8 +389,6 @@ use std::sync::Arc;
                     inputs: vec![],
                     outputs: vec![],
                     outlet_labels: HashMap::new(),
-                    properties: HashMap::new(),
-                    symbol_table: Default::default(),
                 }
             }
         }
@@ -851,8 +833,6 @@ use std::sync::Arc;
                     .iter()
                     .map(|o| mapping[o])
                     .collect();
-                target.symbol_table = source.symbol_table.clone();
-                target.properties = source.properties.clone();
                 Ok((target, mapping))
             }
         }
@@ -1128,7 +1108,7 @@ use std::sync::Arc;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
-    let wire = model.add_source("input", f32::fact(&[1usize, 1])).unwrap();
+    let wire = model.add_source("input", f32::fact([1usize, 1])).unwrap();
     let a = model
         .add_const("a", Tensor::zero::<f32>(&[2, 1]).unwrap().into_arc_tensor())
         .unwrap();
