@@ -3,12 +3,8 @@
 #![allow(clippy::redundant_closure_call)]
 #[macro_use]
 pub extern crate downcast_rs;
-#[macro_use]
-pub mod ops {
+use std::sync::Arc;
     use downcast_rs::Downcast;
-    #[macro_use]
-    pub mod macros {
-        #[macro_export]
         macro_rules! as_op {
             () => {
                 fn as_op(&self) -> &dyn Op {
@@ -16,9 +12,6 @@ pub mod ops {
                 }
             };
         }
-    }
-    pub mod dummy {
-        use crate::internal::*;
         #[derive(Clone, Default)]
         pub struct Dummy;
         impl Op for Dummy {}
@@ -28,9 +21,6 @@ pub mod ops {
                 unimplemented!()
             }
         }
-    }
-    pub mod konst {
-        use crate::internal::*;
         #[derive(Clone)]
         pub struct Const(pub Arc<Tensor>);
         impl Op for Const {}
@@ -40,10 +30,6 @@ pub mod ops {
                 unimplemented!()
             }
         }
-    }
-    pub mod matmul {
-        pub mod lir_unary {
-            use crate::internal::*;
             use ndarray::*;
             #[derive(Copy, Clone, PartialEq, Eq)]
             pub enum BinOp {
@@ -83,9 +69,6 @@ pub mod ops {
                 }
                 as_op!();
             }
-        }
-        pub mod mir {
-            use crate::ops::matmul::*;
             #[derive(Clone)]
             pub struct MatMul {}
             impl Op for MatMul {}
@@ -110,11 +93,6 @@ pub mod ops {
                 }
                 as_op!();
             }
-        }
-        pub mod mir_unary {
-            use super::lir_unary::{LirMatMulUnary, ProtoFusedSpec};
-            use super::*;
-            use tract_ndarray::prelude::*;
             #[derive(Clone)]
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
@@ -158,7 +136,7 @@ pub mod ops {
                     });
                     wire = patch.wire_node(
                         format!("{}.pack", &*node.name),
-                        super::MatMatMulPack {},
+                        MatMatMulPack {},
                         &[wire],
                     )?[0];
                     let op = LirMatMulUnary {
@@ -168,9 +146,6 @@ pub mod ops {
                     Ok(patch)
                 }
             }
-        }
-        pub mod pack {
-            use crate::internal::*;
             #[derive(Clone, PartialEq, Eq)]
             pub struct MatMatMulPack {}
             impl Op for MatMatMulPack {}
@@ -187,18 +162,13 @@ pub mod ops {
                     tvec!(1.into())
                 }
             }
-        }
-        pub use self::mir::MatMul;
-        pub use self::mir_unary::MatMulUnary;
-        use self::pack::MatMatMulPack;
-        use crate::internal::*;
         pub fn compute_shape<D: DimLike>(
             ashape: &[D],
             bshape: &[D],
         ) -> TractResult<(D, D, D, TVec<D>)> {
             let a_shape_bc: TVec<D> = tvec!();
             let b_shape_bc = tvec!();
-            let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
+            let mut c_shape = multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[0].clone(), ashape[1].clone());
             let (_, n) = (bshape[0].clone(), bshape[1].clone());
             c_shape.insert(0, n.clone());
@@ -208,9 +178,6 @@ pub mod ops {
         pub fn output_type(input: DatumType) -> DatumType {
             input
         }
-    }
-    pub mod source {
-        use crate::internal::*;
         #[derive(Clone)]
         pub struct TypedSource {}
         impl Op for TypedSource {}
@@ -220,9 +187,6 @@ pub mod ops {
             }
             as_op!();
         }
-    }
-    use crate::internal::*;
-    use crate::optim::OptimizerSession;
     pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {}
     pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_op(&self) -> &dyn Op;
@@ -284,19 +248,12 @@ pub mod ops {
         Attr(Arc<Tensor>),
         Input(usize),
     }
-}
-mod broadcast {
-    use tract_data::internal::*;
     pub fn multi_broadcast<D>(_shapes: &[impl AsRef<[D]>]) -> Option<TVec<D>>
     where
         D: DimLike,
     {
         Some(tvec!())
     }
-}
-pub mod model {
-    mod fact {
-        use crate::internal::*;
         #[derive(Clone, PartialEq, Eq)]
         pub struct ShapeFact {
             dims: TVec<TDim>,
@@ -413,9 +370,6 @@ pub mod model {
                 TypedFact::dt_shape(*self, shape)
             }
         }
-    }
-    mod graph {
-        use crate::internal::*;
         pub trait SpecialOps<F, O> {
             fn create_dummy(&self) -> O;
             fn create_source(&self, fact: F) -> O;
@@ -551,7 +505,7 @@ pub mod model {
         impl<F: Clone + 'static, O> Graph<F, O>
         where
             F: Clone + 'static + From<std::sync::Arc<Tensor>>,
-            O: From<crate::ops::konst::Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+            O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
         {
             pub fn add_const(
                 &mut self,
@@ -561,7 +515,7 @@ pub mod model {
                 let v = v.into_arc_tensor();
                 let fact = F::from(v.clone());
                 let name = name.into();
-                self.add_node(name, crate::ops::konst::Const(v), tvec!(fact))
+                self.add_node(name, Const(v), tvec!(fact))
                     .map(|id| id.into())
             }
         }
@@ -577,15 +531,11 @@ pub mod model {
             Graph<F, O>: SpecialOps<F, O>,
         {
             pub fn compact(&mut self) -> TractResult<()> {
-                use crate::model::translator::Translate;
-                let mut result = crate::model::translator::IntoTranslator.translate_model(self)?;
+                let mut result = IntoTranslator.translate_model(self)?;
                 std::mem::swap(self, &mut result);
                 Ok(())
             }
         }
-    }
-    mod node {
-        use crate::internal::*;
         #[derive(Clone)]
         pub struct Node<F, O> {
             pub id: usize,
@@ -625,10 +575,7 @@ pub mod model {
             pub node: usize,
             pub slot: usize,
         }
-    }
-    pub mod order {
-        use crate::internal::*;
-        pub fn eval_order<F, O>(model: &super::Graph<F, O>) -> TractResult<Vec<usize>>
+        pub fn eval_order<F, O>(model: &Graph<F, O>) -> TractResult<Vec<usize>>
         where
             F: Clone + 'static,
             O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
@@ -709,9 +656,6 @@ pub mod model {
             }
             Ok(order)
         }
-    }
-    mod patch {
-        use crate::internal::*;
         use std::ops::{Deref, DerefMut};
         #[derive(Clone)]
         pub struct ModelPatch<F, O>
@@ -871,9 +815,6 @@ pub mod model {
                 Ok(())
             }
         }
-    }
-    pub mod translator {
-        use crate::internal::*;
         pub trait Translate<TI1, O1, TI2, O2>
         where
             TI1: Clone + 'static,
@@ -977,24 +918,20 @@ pub mod model {
                 }
             }
         }
-    }
-    pub mod typed {
-        use crate::internal::*;
-        use crate::ops;
         pub type TypedModel = Graph<TypedFact, Box<dyn TypedOp>>;
         pub type TypedNode = Node<TypedFact, Box<dyn TypedOp>>;
         pub type TypedModelPatch = ModelPatch<TypedFact, Box<dyn TypedOp>>;
         impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
             fn is_source(op: &Box<dyn TypedOp>) -> bool {
                 op.as_op()
-                    .downcast_ref::<ops::source::TypedSource>()
+                    .downcast_ref::<TypedSource>()
                     .is_some()
             }
             fn create_dummy(&self) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::dummy::Dummy::default())
+                Box::new(Dummy::default())
             }
             fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::source::TypedSource {})
+                Box::new(TypedSource {})
             }
             fn wire_node(
                 &mut self,
@@ -1040,28 +977,14 @@ pub mod model {
                 Ok(self)
             }
             pub fn declutter(&mut self) -> TractResult<()> {
-                crate::optim::Optimizer::declutter()
+                Optimizer::declutter()
                     .session()
                     .optimize(self)
             }
             pub fn optimize(&mut self) -> TractResult<()> {
-                crate::optim::Optimizer::codegen().optimize(self)
+                Optimizer::codegen().optimize(self)
             }
         }
-    }
-    pub use self::fact::*;
-    pub use self::graph::*;
-    pub use self::node::*;
-    pub use self::order::eval_order;
-    pub use self::patch::ModelPatch;
-    pub use crate::ops::{Op, TypedOp};
-    pub use typed::*;
-}
-pub mod optim {
-    use crate::internal::*;
-    mod op_optim {
-        use super::OptimizerSession;
-        use crate::internal::*;
         #[derive(Clone)]
         pub struct OpOptim(
             pub &'static str,
@@ -1090,7 +1013,7 @@ pub mod optim {
                 Ok(None)
             }
         }
-        impl super::TypedPass for OpOptim {
+        impl TypedPass for OpOptim {
             fn reset(&mut self) -> TractResult<()> {
                 self.2 = 0;
                 Ok(())
@@ -1103,8 +1026,6 @@ pub mod optim {
                 self.full_pass(session, model)
             }
         }
-    }
-    use op_optim::OpOptim;
     pub trait TypedPass: Send + Sync + dyn_clone::DynClone {
         fn reset(&mut self) -> TractResult<()>;
         fn next(
@@ -1200,22 +1121,12 @@ pub mod optim {
             Ok(())
         }
     }
-}
-pub mod prelude {
-    pub use std::sync::Arc;
-}
-pub mod internal {
-    pub use crate::model::*;
-    pub use crate::ops::{AttrOrInput, Op};
-    pub use crate::prelude::*;
     pub use std::borrow::Cow;
     pub use std::collections::HashMap;
     pub use tract_data::internal::*;
-}
+
 #[test]
 fn crasher_monterey_matmul() {
-    use crate::internal::*;
-    use crate::ops::matmul::*;
     let mut model = TypedModel::default();
     let wire = model.add_source("input", f32::fact(&[1usize, 1])).unwrap();
     let a = model
