@@ -27,14 +27,6 @@ pub mod ops {
                 }
             };
         }
-        #[macro_export]
-        macro_rules! args_1 {
-            ($ inputs : expr) => {{
-                let result = $inputs.pop().unwrap();
-                ::std::mem::drop($inputs);
-                result
-            }};
-        }
     }
     pub mod dummy {
         use crate::internal::*;
@@ -217,13 +209,9 @@ pub mod ops {
                     model: &TypedModel,
                     node: &TypedNode,
                 ) -> TractResult<Option<TypedModelPatch>> {
-                    let b = args_1!(model.node_input_facts(node.id)?);
-                    if let Some(b_shape) = b.shape.as_concrete() {
-                        let patch = self.new_mat_mul_unary_finite(model, node)?;
-                        Ok(None)
-                    } else {
-                        unimplemented!()
-                    }
+                    let patch = self.new_mat_mul_unary_finite(model, node)?;
+                    Ok(None)
+                    /* CRASH HERE */ 
                 }
                 as_op!();
             }
@@ -1127,9 +1115,6 @@ pub mod model {
             ) -> TractResult<()> {
                 let original_fact = model.outlet_fact(outlet)?;
                 let new_fact = self.model.outlet_fact(by)?;
-                if !original_fact.compatible_with(new_fact) {
-                    unimplemented!()
-                }
                 self.shunt_outlet_by.insert(outlet, by);
                 Ok(())
             }
@@ -1164,11 +1149,10 @@ pub mod model {
                     incoming: mut mapping,
                     shunt_outlet_by,
                     obliterate,
-                    inputs: replaced_inputs,
                     ..
                 } = self;
                 let mut all_inputs = HashMap::new();
-                let mut model_input_outlets = target.input_outlets()?.to_vec();
+                let model_input_outlets = target.input_outlets()?.to_vec();
                 for node in patch.nodes {
                     if <Graph<F, O>>::is_source(&node.op)
                         && mapping.contains_key(&OutletId::new(node.id, 0))
@@ -1183,17 +1167,6 @@ pub mod model {
                         outputs,
                     } = node;
                     let n_outputs = outputs.len();
-                    for dup in 0..target.nodes.len() {
-                        if target.node(dup).op().same_as(op.as_ref())
-                            && inputs.len() == target.node(dup).inputs.len()
-                            && inputs
-                                .iter()
-                                .zip(target.node(dup).inputs.iter())
-                                .all(|(patch_input, d)| mapping[patch_input] == *d)
-                        {
-                            unimplemented!()
-                        }
-                    }
                     let facts = outputs.into_iter().map(|of| of.fact).collect();
                     let added_node_id = target.add_node(name, op, facts)?;
                     for ix in 0..n_outputs {
@@ -1203,31 +1176,16 @@ pub mod model {
                         );
                     }
                     all_inputs.insert(added_node_id, inputs);
-                    if <Graph<F, O>>::is_source(&target.node(added_node_id).op) {
-                        unimplemented!()
-                    }
                 }
                 debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
                 debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
                 for (outlet, by) in shunt_outlet_by {
                     let replace_by = mapping[&by];
-                    let succs = target.nodes()[outlet.node].outputs[outlet.slot]
-                        .successors
-                        .clone();
-                    for succ in succs {
-                        unimplemented!()
-                    }
                     for o in target.outputs.iter_mut() {
                         if *o == outlet {
                             *o = replace_by;
                         }
                     }
-                    if let Some(label) = target.outlet_labels.remove(&outlet) {
-                        unimplemented!()
-                    }
-                }
-                if target.outputs.len() > target.outputs.iter().sorted().dedup().count() {
-                    unimplemented!()
                 }
                 debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
                 debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
@@ -1278,14 +1236,6 @@ pub mod model {
                     let outlets = self.translate_node(source, node, &mut target, &mapping)?;
                     for (ix, outlet) in outlets.into_iter().enumerate() {
                         mapping.insert(OutletId::new(node.id, ix), outlet);
-                        if let Some(label) = source.outlet_label(OutletId::new(node.id, ix)) {
-                            unimplemented!()
-                        }
-                    }
-                }
-                for i in source.input_outlets()? {
-                    if !mapping.contains_key(i) {
-                        unimplemented!()
                     }
                 }
                 target.inputs = source.input_outlets()?.iter().map(|i| mapping[i]).collect();
@@ -1470,7 +1420,7 @@ pub mod optim {
                 for (ix, &id) in new.eval_order()?.iter().enumerate().skip(self.2) {
                     let node = &new.nodes()[id];
                     let patch = (self.1)(node.op.as_ref(), session, new, node)?;
-                    if let Some(mut p) = patch {
+                    if let Some(p) = patch {
                         self.2 = ix + p.dont_apply_twice.is_some() as usize;
                         return Ok(Some(p));
                     }
@@ -1492,47 +1442,6 @@ pub mod optim {
             }
         }
     }
-    mod prop_const {
-        use crate::internal::*;
-        use crate::ops::konst::Const;
-        use crate::optim::OptimizerSession;
-        #[derive(Clone)]
-        pub struct PropConst;
-        impl super::TypedPass for PropConst {
-            fn reset(&mut self) -> TractResult<()> {
-                Ok(())
-            }
-            fn next(
-                &mut self,
-                _session: &mut OptimizerSession,
-                model: &TypedModel,
-            ) -> TractResult<Option<TypedModelPatch>> {
-                let mut patch = TypedModelPatch::default();
-                for n in model.eval_order()? {
-                    let node = model.node(n);
-                    if node.op.is_stateless() && !node.op_is::<Const>() {
-                        if let Some(inputs) = model
-                            .node_input_facts(n)?
-                            .iter()
-                            .map(|f| f.konst.clone().map(|t| t.into_tvalue()))
-                            .collect()
-                        {
-                            match node.op.eval(inputs) {
-                                Ok(res) => {
-                                    unimplemented!()
-                                }
-                                Err(e) => {
-                                    unimplemented!()
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(Some(patch).filter(|p| p.nodes.len() > 0))
-            }
-        }
-    }
-    use self::prop_const::PropConst;
     use op_optim::OpOptim;
     pub trait TypedPass: Send + Sync + dyn_clone::DynClone {
         fn reset(&mut self) -> TractResult<()>;
@@ -1545,24 +1454,20 @@ pub mod optim {
     dyn_clone::clone_trait_object!(TypedPass);
     pub struct Optimizer {
         passes: Vec<Box<dyn TypedPass>>,
-        steps: Option<usize>,
     }
     impl Optimizer {
         fn passes(passes: Vec<Box<dyn TypedPass>>) -> Optimizer {
             Optimizer {
                 passes,
-                steps: None,
             }
         }
         pub fn declutter() -> Optimizer {
             Optimizer::passes(vec![
-                Box::new(PropConst),
                 Box::new(OpOptim("declutter", TypedOp::declutter_with_session, 0)),
             ])
         }
         pub fn codegen() -> Optimizer {
             Optimizer::passes(vec![
-                Box::new(PropConst),
                 Box::new(OpOptim(
                     "codegen",
                     |op, _session, model, node| TypedOp::codegen(op, model, node),
@@ -1578,21 +1483,19 @@ pub mod optim {
             OptimizerSession {
                 optimizer: self,
                 counter: 0,
-                seen: Default::default(),
             }
         }
     }
     pub struct OptimizerSession<'o> {
         optimizer: &'o Optimizer,
         counter: usize,
-        seen: HashSet<String>,
     }
     impl<'o> OptimizerSession<'o> {
         pub fn optimize(&mut self, model: &mut TypedModel) -> TractResult<()> {
             model.compact()?;
-            for i in 0.. {
+            for _i in 0.. {
                 let old = self.counter;
-                self.run_all_passes(i, model)?;
+                self.run_all_passes(model)?;
                 if old == self.counter {
                     return Ok(());
                 }
@@ -1600,23 +1503,22 @@ pub mod optim {
             }
             unreachable!()
         }
-        pub fn run_all_passes(&mut self, i: usize, model: &mut TypedModel) -> TractResult<()> {
+        pub fn run_all_passes(&mut self, model: &mut TypedModel) -> TractResult<()> {
             let mut passes = self.optimizer.passes.clone();
             for p in passes.iter_mut() {
-                self.run_one_pass_outer(i, p.as_mut(), model)?;
+                self.run_one_pass_outer(p.as_mut(), model)?;
                 model.compact()?;
             }
             Ok(())
         }
         pub fn run_one_pass_outer(
             &mut self,
-            i: usize,
             p: &mut dyn TypedPass,
             model: &mut TypedModel,
         ) -> TractResult<()> {
             loop {
                 let old_counter = self.counter;
-                self.run_one_pass_inner(i, p, model)?;
+                self.run_one_pass_inner(p, model)?;
                 if self.counter == old_counter {
                     return Ok(());
                 }
@@ -1625,12 +1527,11 @@ pub mod optim {
         }
         pub fn run_one_pass_inner(
             &mut self,
-            i: usize,
             p: &mut dyn TypedPass,
             model: &mut TypedModel,
         ) -> TractResult<()> {
             p.reset()?;
-            while let Some(mut patch) = p.next(self, model)? {
+            while let Some(patch) = p.next(self, model)? {
                 patch.apply(model)?;
                 self.counter += 1;
             }
@@ -1683,5 +1584,5 @@ fn crasher_monterey_matmul() {
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
     let decluttered = model.into_decluttered().unwrap();
-    let optimized = decluttered.into_optimized().unwrap();
+    let _optimized = decluttered.into_optimized().unwrap();
 }
