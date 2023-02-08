@@ -21,8 +21,7 @@ pub mod ops {
         use crate::internal::*;
         #[derive(Clone, Default)]
         pub struct Dummy;
-        impl Op for Dummy {
-        }
+        impl Op for Dummy {}
         impl TypedOp for Dummy {
             as_op!();
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -34,8 +33,7 @@ pub mod ops {
         use crate::internal::*;
         #[derive(Clone)]
         pub struct Const(pub Arc<Tensor>);
-        impl Op for Const {
-        }
+        impl Op for Const {}
         impl TypedOp for Const {
             as_op!();
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -78,8 +76,7 @@ pub mod ops {
             pub struct LirMatMulUnary {
                 pub micro_ops: ArrayD<(Arc<Tensor>, Vec<ProtoFusedSpec>)>,
             }
-            impl Op for LirMatMulUnary {
-            }
+            impl Op for LirMatMulUnary {}
             impl TypedOp for LirMatMulUnary {
                 fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                     Ok(tvec!(f32::fact([1, 2])))
@@ -90,14 +87,11 @@ pub mod ops {
         pub mod mir {
             use crate::ops::matmul::*;
             #[derive(Clone)]
-            pub struct MatMul {
-            }
-            impl Op for MatMul {
-            }
+            pub struct MatMul {}
+            impl Op for MatMul {}
             impl TypedOp for MatMul {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                    let (_m, _k, _n, c_shape) =
-                        compute_shape(&inputs[0].shape, &inputs[1].shape)?;
+                    let (_m, _k, _n, c_shape) = compute_shape(&inputs[0].shape, &inputs[1].shape)?;
                     Ok(tvec!(f32::fact(c_shape)))
                 }
                 fn declutter(
@@ -105,11 +99,7 @@ pub mod ops {
                     model: &TypedModel,
                     node: &TypedNode,
                 ) -> TractResult<Option<TypedModelPatch>> {
-                    let konst = model
-                        .outlet_fact(node.inputs[0])?
-                        .konst
-                        .clone()
-                        .unwrap();
+                    let konst = model.outlet_fact(node.inputs[0])?.konst.clone().unwrap();
                     TypedModelPatch::replace_single_op(
                         model,
                         node,
@@ -129,8 +119,7 @@ pub mod ops {
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
             }
-            impl Op for MatMulUnary {
-            }
+            impl Op for MatMulUnary {}
             impl TypedOp for MatMulUnary {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                     let (_m, _k, _n, c_shape) = compute_shape(
@@ -184,8 +173,7 @@ pub mod ops {
             use crate::internal::*;
             #[derive(Clone, PartialEq, Eq)]
             pub struct MatMatMulPack {}
-            impl Op for MatMatMulPack {
-            }
+            impl Op for MatMatMulPack {}
             impl TypedOp for MatMatMulPack {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                     Ok(tvec!(inputs[0]
@@ -224,10 +212,8 @@ pub mod ops {
     pub mod source {
         use crate::internal::*;
         #[derive(Clone)]
-        pub struct TypedSource {
-        }
-        impl Op for TypedSource {
-        }
+        pub struct TypedSource {}
+        impl Op for TypedSource {}
         impl TypedOp for TypedSource {
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                 unimplemented!()
@@ -237,8 +223,7 @@ pub mod ops {
     }
     use crate::internal::*;
     use crate::optim::OptimizerSession;
-    pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {
-    }
+    pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {}
     pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_op(&self) -> &dyn Op;
         fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>>;
@@ -318,10 +303,6 @@ pub mod model {
             concrete: Option<TVec<usize>>,
         }
         impl ShapeFact {
-            #[inline]
-            pub fn rank(&self) -> usize {
-                self.dims.len()
-            }
             fn compute_concrete(&mut self) {
                 assert!(self
                     .dims
@@ -379,9 +360,6 @@ pub mod model {
                     konst: None,
                     uniform: None,
                 }
-            }
-            pub fn rank(&self) -> usize {
-                self.shape.rank()
             }
         }
         impl From<Arc<Tensor>> for TypedFact {
@@ -1016,7 +994,7 @@ pub mod model {
                 Box::new(crate::ops::dummy::Dummy::default())
             }
             fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
-                Box::new(crate::ops::source::TypedSource { })
+                Box::new(crate::ops::source::TypedSource {})
             }
             fn wire_node(
                 &mut self,
@@ -1243,7 +1221,7 @@ fn crasher_monterey_matmul() {
     let a = model
         .add_const("a", Tensor::zero::<f32>(&[2, 1]).unwrap().into_arc_tensor())
         .unwrap();
-    let op = MatMul { };
+    let op = MatMul {};
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
     let decluttered = model.into_decluttered().unwrap();
