@@ -1,71 +1,13 @@
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 use std::fmt;
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
-pub enum DatumType {
-    F32,
-}
-impl DatumType {
-    pub fn is_unsigned(&self) -> bool {
-        false
-    }
-    pub fn is_signed(&self) -> bool {
-        false
-    }
-    pub fn is_float(&self) -> bool {
-        matches!(self, DatumType::F32)
-    }
-    pub fn is_copy(&self) -> bool {
-        self.is_unsigned() || self.is_signed() || self.is_float()
-    }
-    pub fn unquantized(&self) -> DatumType {
-        match self {
-            _ => *self,
-        }
-    }
-    #[inline]
-    pub fn size_of(&self) -> usize {
-        std::mem::size_of::<f32>()
-    }
-    #[inline]
-    pub fn alignment(&self) -> usize {
-        match self {
-            _ => self.size_of(),
-        }
-    }
-}
-pub trait Datum:
-    Clone + Send + Sync + fmt::Debug + fmt::Display + Default + 'static + PartialEq
-{
-    fn name() -> &'static str;
-    fn datum_type() -> DatumType;
-}
-macro_rules! datum {
-    ($ t : ty , $ v : ident) => {
-        impl From<$t> for Tensor {
-            fn from(it: $t) -> Tensor {
-                tensor0(it)
-            }
-        }
-        impl Datum for $t {
-            fn name() -> &'static str {
-                stringify!($t)
-            }
-            fn datum_type() -> DatumType {
-                DatumType::$v
-            }
-        }
-    };
-}
-datum!(f32, F32);
 use ndarray::*;
 use std::alloc;
-pub fn tensor0<A: Datum>(x: A) -> Tensor {
+pub fn tensor0(x: f32) -> Tensor {
     Tensor::from(arr0(x))
 }
 #[derive(Eq)]
 pub struct Tensor {
-    dt: DatumType,
     shape: Vec<usize>,
     strides: Vec<isize>,
     len: usize,
@@ -74,25 +16,14 @@ pub struct Tensor {
 unsafe impl Send for Tensor {}
 unsafe impl Sync for Tensor {}
 impl Tensor {
-    pub unsafe fn uninitialized<T: Datum>(shape: &[usize]) -> anyhow::Result<Tensor> {
-        Self::uninitialized_dt(T::datum_type(), shape)
+    pub unsafe fn uninitialized(shape: &[usize]) -> anyhow::Result<Tensor> {
+        Self::uninitialized_aligned(shape, 4)
     }
-    pub unsafe fn uninitialized_dt(dt: DatumType, shape: &[usize]) -> anyhow::Result<Tensor> {
-        Self::uninitialized_aligned_dt(dt, shape, dt.alignment())
-    }
-    pub unsafe fn uninitialized_aligned<T: Datum>(
+    pub unsafe fn uninitialized_aligned(
         shape: &[usize],
         alignment: usize,
     ) -> anyhow::Result<Tensor> {
-        Self::uninitialized_aligned_dt(T::datum_type(), shape, alignment)
-    }
-    pub unsafe fn uninitialized_aligned_dt(
-        dt: DatumType,
-        shape: &[usize],
-        alignment: usize,
-    ) -> anyhow::Result<Tensor> {
-        assert!(dt.is_copy());
-        let bytes = shape.iter().cloned().product::<usize>() * dt.size_of();
+        let bytes = shape.iter().cloned().product::<usize>() * 4;
         let layout = alloc::Layout::from_size_align(bytes, alignment)?;
         let data = if bytes == 0 {
             unimplemented!()
@@ -101,28 +32,28 @@ impl Tensor {
             assert!(!ptr.is_null());
             ptr
         } as *mut u8;
-        let mut tensor = Tensor { strides: vec![], dt, shape: shape.into(), data, len: 0 };
+        let mut tensor = Tensor { strides: vec![], shape: shape.into(), data, len: 0 };
         tensor.update_strides_and_len();
         Ok(tensor)
     }
-    pub fn clear<T: Datum + Clone>(&mut self) -> anyhow::Result<()> {
-        self.fill_t::<f32>(0.0)
+    pub fn clear(&mut self) -> anyhow::Result<()> {
+        self.fill(0.0)
     }
-    pub fn zero<T: Datum>(shape: &[usize]) -> anyhow::Result<Tensor> {
+    pub fn zero(shape: &[usize]) -> anyhow::Result<Tensor> {
         unsafe {
-            let mut t = Tensor::uninitialized::<T>(shape)?;
-            t.clear::<T>()?;
+            let mut t = Tensor::uninitialized(shape)?;
+            t.clear()?;
             Ok(t)
         }
     }
-    pub fn fill_t<T: Datum + Clone>(&mut self, value: T) -> anyhow::Result<()> {
-        self.as_slice_mut::<T>()?.iter_mut().for_each(|item| *item = value.clone());
+    pub fn fill(&mut self, value: f32) -> anyhow::Result<()> {
+        self.as_slice_mut()?.iter_mut().for_each(|item| *item = value.clone());
         Ok(())
     }
-    pub fn zero_aligned<T: Datum>(shape: &[usize], alignment: usize) -> anyhow::Result<Tensor> {
+    pub fn zero_aligned(shape: &[usize], alignment: usize) -> anyhow::Result<Tensor> {
         unsafe {
-            let mut tensor = Self::uninitialized_aligned::<T>(shape, alignment)?;
-            tensor.clear::<T>()?;
+            let mut tensor = Self::uninitialized_aligned(shape, alignment)?;
+            tensor.clear()?;
             Ok(tensor)
         }
     }
@@ -145,76 +76,52 @@ impl Tensor {
         self.len = if self.rank() == 0 {
             1
         } else {
-            unsafe { *self.strides.get_unchecked(0) as usize * self.shape.get_unchecked(0) }
+            self.strides[0] as usize * self.shape[0]
         }
     }
-    #[inline]
-    pub fn datum_type(&self) -> DatumType {
-        self.dt
+    pub fn as_ptr(&self) -> anyhow::Result<*const f32> {
+        Ok(self.data as *const f32)
     }
-    #[inline]
-    pub unsafe fn set_datum_type(&mut self, dt: DatumType) {
-        self.dt = dt
+    pub fn as_ptr_mut(&mut self) -> anyhow::Result<*mut f32> {
+        self.as_ptr().map(|p| p as *mut f32)
     }
-    fn check_for_access<D: Datum>(&self) -> anyhow::Result<()> {
-        if self.datum_type().unquantized() != D::datum_type().unquantized() {
-            unimplemented!()
-        }
-        Ok(())
+    pub fn as_slice_mut(&mut self) -> anyhow::Result<&mut [f32]> {
+        let ptr = self.as_ptr_mut()?;
+        unsafe { Ok(std::slice::from_raw_parts_mut(ptr, self.len())) }
     }
-    pub fn as_ptr<D: Datum>(&self) -> anyhow::Result<*const D> {
-        self.check_for_access::<D>()?;
-        Ok(self.data as *const D)
+    pub unsafe fn as_slice_unchecked(&self) -> &[f32] {
+        std::slice::from_raw_parts(self.data as *const f32, self.len())
     }
-    pub fn as_ptr_mut<D: Datum>(&mut self) -> anyhow::Result<*mut D> {
-        self.as_ptr::<D>().map(|p| p as *mut D)
-    }
-    pub fn as_slice_mut<D: Datum>(&mut self) -> anyhow::Result<&mut [D]> {
-        let ptr: *mut D = self.as_ptr_mut()?;
-        if ptr.is_null() {
-            unimplemented!()
-        } else {
-            unsafe { Ok(std::slice::from_raw_parts_mut::<D>(ptr, self.len())) }
-        }
-    }
-    pub unsafe fn as_slice_unchecked<D: Datum>(&self) -> &[D] {
-        if self.data.is_null() {
-            unimplemented!()
-        } else {
-            std::slice::from_raw_parts::<D>(self.data as *const D, self.len())
-        }
-    }
-    unsafe fn is_uniform_t<T: Datum>(&self) -> bool {
-        let slice = self.as_slice_unchecked::<T>();
+    unsafe fn is_uniform_t(&self) -> bool {
+        let slice = self.as_slice_unchecked();
         slice[1..].iter().all(|x| x == &slice[0])
     }
     pub fn is_uniform(&self) -> bool {
         if self.len() <= 1 {
             unimplemented!()
         }
-        unsafe { Tensor::is_uniform_t::<f32>(self) }
+        unsafe { Tensor::is_uniform_t(self) }
     }
-    unsafe fn as_uniform_t<T: Datum>(&self) -> Tensor {
-        let v: T = self.as_slice_unchecked::<T>()[0].clone();
+    unsafe fn as_uniform_t(&self) -> Tensor {
+        let v = self.as_slice_unchecked()[0].clone();
         tensor0(v)
     }
     pub fn as_uniform(&self) -> Option<Tensor> {
         if self.len() >= 1 && self.is_uniform() {
             unsafe {
-                let mut t = Tensor::as_uniform_t::<f32>(self);
-                t.set_datum_type(self.datum_type());
+                let mut t = Tensor::as_uniform_t(self);
                 Some(t)
             }
         } else {
             unimplemented!()
         }
     }
-    fn from_datum<T: Datum>(it: ArrayD<T>) -> Tensor {
+    fn from_datum(it: ArrayD<f32>) -> Tensor {
         if it.as_slice().is_some() {
             let shape = it.shape().into();
             let vec = it.into_raw_vec().into_boxed_slice();
             let data = Box::into_raw(vec) as *mut u8;
-            let mut t = Tensor { dt: T::datum_type(), shape, data, strides: vec![], len: 0 };
+            let mut t = Tensor { shape, data, strides: vec![], len: 0 };
             t.update_strides_and_len();
             return t;
         }
@@ -243,8 +150,8 @@ fn compute_natural_stride_to(strides: &mut Vec<isize>, shape: &[usize]) {
         }
     }
 }
-impl<D: ::ndarray::Dimension, T: Datum> From<Array<T, D>> for Tensor {
-    fn from(it: Array<T, D>) -> Tensor {
+impl<D: ::ndarray::Dimension> From<Array<f32, D>> for Tensor {
+    fn from(it: Array<f32, D>) -> Tensor {
         Tensor::from_datum(it.into_dyn())
     }
 }
@@ -316,7 +223,7 @@ pub struct LirMatMulUnary {
 impl Op for LirMatMulUnary {}
 impl TypedOp for LirMatMulUnary {
     fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![f32::fact([1, 2])])
+        Ok(vec![fact([1, 2])])
     }
     as_op!();
 }
@@ -326,7 +233,7 @@ impl Op for MatMul {}
 impl TypedOp for MatMul {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
         let (_m, _k, _n, c_shape) = compute_shape(&inputs[0].shape, &inputs[1].shape)?;
-        Ok(vec![f32::fact(c_shape)])
+        Ok(vec![fact(c_shape)])
     }
     fn declutter(
         &self,
@@ -352,8 +259,7 @@ impl Op for MatMulUnary {}
 impl TypedOp for MatMulUnary {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
         let (_m, _k, _n, c_shape) = compute_shape(&self.a.shape(), &inputs[0].shape)?;
-        let c_dt = output_type(inputs[0].datum_type);
-        Ok(vec![c_dt.fact(c_shape)])
+        Ok(vec![fact(c_shape)])
     }
     fn codegen(
         &self,
@@ -374,7 +280,7 @@ impl MatMulUnary {
         let mut patch = TypedModelPatch::default();
         let mut wire = patch.tap_model(model, node.inputs[0])?;
         let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            let pa = Tensor::zero_aligned::<f32>(&[64], 32).unwrap();
+            let pa = Tensor::zero_aligned(&[64], 32).unwrap();
             (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
         });
         wire = patch.wire_node(format!("{}.pack", &*node.name), MatMatMulPack {}, &[wire])?[0];
@@ -388,7 +294,7 @@ pub struct MatMatMulPack {}
 impl Op for MatMatMulPack {}
 impl TypedOp for MatMatMulPack {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![inputs[0].datum_type.fact(self.output_shape(&inputs[0].shape))])
+        Ok(vec![fact(self.output_shape(&inputs[0].shape))])
     }
     as_op!();
 }
@@ -409,9 +315,6 @@ pub fn compute_shape(
     c_shape.insert(0, n.clone());
     c_shape.insert(1, m.clone());
     Ok((m, ka, n, c_shape))
-}
-pub fn output_type(input: DatumType) -> DatumType {
-    input
 }
 #[derive(Clone)]
 pub struct TypedSource {}
@@ -514,30 +417,27 @@ impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
 }
 #[derive(Clone, PartialEq, Eq)]
 pub struct TypedFact {
-    pub datum_type: DatumType,
     pub shape: ShapeFact,
     pub konst: Option<Arc<Tensor>>,
     pub uniform: Option<Arc<Tensor>>,
 }
 impl TypedFact {
-    pub fn shape<T, S>(shape: S) -> TypedFact
+    pub fn shape<S>(shape: S) -> TypedFact
     where
-        T: Datum,
         S: Into<ShapeFact>,
     {
-        Self::dt_shape(T::datum_type(), shape)
+        Self::dt_shape(shape)
     }
-    pub fn dt_shape<S>(datum_type: DatumType, shape: S) -> TypedFact
+    pub fn dt_shape<S>(shape: S) -> TypedFact
     where
         S: Into<ShapeFact>,
     {
-        TypedFact { datum_type, shape: shape.into(), konst: None, uniform: None }
+        TypedFact { shape: shape.into(), konst: None, uniform: None }
     }
 }
 impl From<Arc<Tensor>> for TypedFact {
     fn from(t: Arc<Tensor>) -> TypedFact {
         TypedFact {
-            datum_type: t.datum_type(),
             shape: ShapeFact::from_dims(t.shape().to_vec()),
             uniform: t.as_uniform().map(Arc::new),
             konst: Some(t),
@@ -549,41 +449,11 @@ impl<'a> From<&'a TypedFact> for TypedFact {
         fact.clone()
     }
 }
-pub trait DatumExt {
-    fn scalar_fact() -> TypedFact;
-    fn fact<S>(shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>;
-}
-impl<T: Datum> DatumExt for T {
-    #[allow(clippy::needless_borrow)]
-    fn scalar_fact() -> TypedFact {
-        unimplemented!()
-    }
-    fn fact<S>(shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>,
-    {
-        TypedFact::shape::<Self, _>(shape)
-    }
-}
-pub trait DatumTypeExt {
-    fn scalar_fact(&self) -> TypedFact;
-    fn fact<S>(&self, shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>;
-}
-impl DatumTypeExt for DatumType {
-    #[allow(clippy::needless_borrow)]
-    fn scalar_fact(&self) -> TypedFact {
-        unimplemented!()
-    }
-    fn fact<S>(&self, shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>,
-    {
-        TypedFact::dt_shape(*self, shape)
-    }
+fn fact<S>(shape: S) -> TypedFact
+where
+S: Into<ShapeFact>,
+{
+TypedFact::dt_shape(shape)
 }
 pub trait SpecialOps<F, O> {
     fn create_dummy(&self) -> O;
@@ -1245,8 +1115,8 @@ pub use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
-    let wire = model.add_source("input", f32::fact([1usize, 1])).unwrap();
-    let a = model.add_const("a", Tensor::zero::<f32>(&[2, 1]).unwrap().into_arc_tensor()).unwrap();
+    let wire = model.add_source("input", fact([1usize, 1])).unwrap();
+    let a = model.add_const("a", Tensor::zero(&[2, 1]).unwrap().into_arc_tensor()).unwrap();
     let op = MatMul {};
     let wire = model.wire_node("conv", op, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
