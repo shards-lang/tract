@@ -36,9 +36,6 @@ pub mod ops {
         #[macro_export]
         macro_rules! args_1 {
             ($ inputs : expr) => {{
-                if $inputs.len() != 1 {
-                    $crate::internal::bail!("Expected 1 arg, got {:?}", $inputs)
-                }
                 let result = $inputs.pop().unwrap();
                 ::std::mem::drop($inputs);
                 result
@@ -47,7 +44,7 @@ pub mod ops {
     }
     pub mod dummy {
         use crate::internal::*;
-        #[derive(Debug, Clone, Default, Hash)]
+        #[derive(Clone, Default, Hash)]
         pub struct Dummy;
         impl Op for Dummy {
             op_as_typed_op!();
@@ -67,7 +64,7 @@ pub mod ops {
     }
     pub mod konst {
         use crate::internal::*;
-        #[derive(Debug, Clone, Hash)]
+        #[derive(Clone, Hash)]
         pub struct Const(pub Arc<Tensor>);
         impl_dyn_hash!(Const);
         impl Op for Const {
@@ -81,7 +78,7 @@ pub mod ops {
         impl TypedOp for Const {
             as_op!();
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                Ok(tvec!(self.0.as_ref().into()))
+                unimplemented!()
             }
         }
     }
@@ -89,12 +86,12 @@ pub mod ops {
         pub mod lir_unary {
             use crate::internal::*;
             use ndarray::*;
-            #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+            #[derive(Copy, Clone, PartialEq, Eq, Hash)]
             pub enum BinOp {
                 Min,
                 Max,
             }
-            #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+            #[derive(Clone, Copy, Eq, PartialEq, Hash)]
             pub enum OutputStoreSpec {
                 View {
                     m_axis: usize,
@@ -107,7 +104,7 @@ pub mod ops {
                     n: usize,
                 },
             }
-            #[derive(PartialEq, Eq, Clone, Hash, Debug)]
+            #[derive(PartialEq, Eq, Clone, Hash)]
             pub enum ProtoFusedSpec {
                 BinScalar(AttrOrInput, BinOp),
                 BinPerRow(AttrOrInput, BinOp),
@@ -116,7 +113,7 @@ pub mod ops {
                 AddUnicast(OutputStoreSpec, AttrOrInput),
                 Store,
             }
-            #[derive(Clone, Debug, Hash)]
+            #[derive(Clone,  Hash)]
             pub struct LirMatMulUnary {
                 pub micro_ops: ArrayD<(Arc<Tensor>, Vec<ProtoFusedSpec>)>,
             }
@@ -142,7 +139,7 @@ pub mod ops {
         }
         pub mod mir {
             use crate::ops::matmul::*;
-            #[derive(Debug, Clone, Default, Hash)]
+            #[derive(Clone, Default, Hash)]
             pub struct MatMul {
                 pub axes: MatMulAxes,
             }
@@ -201,7 +198,7 @@ pub mod ops {
             use super::lir_unary::{LirMatMulUnary, ProtoFusedSpec};
             use super::*;
             use tract_ndarray::prelude::*;
-            #[derive(Debug, Clone, Hash)]
+            #[derive(Clone, Hash)]
             pub struct MatMulUnary {
                 pub a: Arc<Tensor>,
                 pub axes: MatMulAxes,
@@ -217,12 +214,6 @@ pub mod ops {
             }
             impl TypedOp for MatMulUnary {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                    ensure!(
-                        inputs[0].rank() == self.a.rank(),
-                        "Inconsistent matmul between input {:?} and attribute {:?} (rank mismatch)",
-                        inputs[0],
-                        self.a
-                    );
                     let (_m, _k, _n, c_shape) = compute_shape(
                         &self
                             .a
@@ -278,7 +269,7 @@ pub mod ops {
         }
         pub mod pack {
             use crate::internal::*;
-            #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+            #[derive(Clone, PartialEq, Eq, Hash)]
             pub struct MatMatMulPack {}
             impl DynHash for MatMatMulPack {
                 fn dyn_hash(&self, hasher: &mut dyn std::hash::Hasher) {
@@ -311,7 +302,7 @@ pub mod ops {
         pub use self::mir_unary::MatMulUnary;
         use self::pack::MatMatMulPack;
         use crate::internal::*;
-        #[derive(PartialEq, Eq, Clone, Debug, Copy, Hash)]
+        #[derive(PartialEq, Eq, Clone, Copy, Hash)]
         pub struct MatMulAxes {
             pub a_m: usize,
             pub a_k: usize,
@@ -418,7 +409,7 @@ pub mod ops {
     }
     pub mod source {
         use crate::internal::*;
-        #[derive(Debug, Clone, Hash)]
+        #[derive(Clone, Hash)]
         pub struct TypedSource {
             pub fact: TypedFact,
         }
@@ -433,7 +424,7 @@ pub mod ops {
         }
         impl TypedOp for TypedSource {
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
-                Ok(tvec!(self.fact.clone()))
+                unimplemented!()
             }
             as_op!();
         }
@@ -448,7 +439,7 @@ pub mod ops {
         fn is_stateless(&self) -> bool;
     }
     pub trait Op:
-        fmt::Debug + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
+         dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
     {
         fn same_as(&self, _other: &dyn Op) -> bool {
             false
@@ -456,7 +447,7 @@ pub mod ops {
         fn as_typed(&self) -> Option<&dyn TypedOp>;
     }
     pub trait TypedOp:
-        Op + fmt::Debug + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
+        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp + DynHash
     {
         fn as_op(&self) -> &dyn Op;
         fn as_op_mut(&mut self) -> &mut dyn Op;
@@ -518,7 +509,7 @@ pub mod ops {
             write!(fmt, "foo")
         }
     }
-    #[derive(Debug, Clone, Hash, PartialEq, Eq)]
+    #[derive(Clone, Hash, PartialEq, Eq)]
     pub enum AttrOrInput {
         Attr(Arc<Tensor>),
         Input(usize),
@@ -611,7 +602,7 @@ pub mod model {
             }
         }
         pub trait Fact:
-            std::fmt::Debug + Downcast + dyn_clone::DynClone + Send + Sync + 'static
+            Downcast + dyn_clone::DynClone + Send + Sync + 'static
         {
             fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>>;
             fn matches(&self, t: &Tensor, symbols: Option<&SymbolValues>) -> TractResult<bool> {
@@ -719,12 +710,12 @@ pub mod model {
         }
         impl From<Tensor> for TypedFact {
             fn from(t: Tensor) -> TypedFact {
-                TypedFact::from(t.into_arc_tensor())
+                unimplemented!()
             }
         }
         impl<'t> From<&'t Tensor> for TypedFact {
             fn from(t: &'t Tensor) -> TypedFact {
-                TypedFact::from(t.clone())
+                unimplemented!()
             }
         }
         impl From<Arc<Tensor>> for TypedFact {
@@ -740,11 +731,6 @@ pub mod model {
         impl<'a> From<&'a TypedFact> for TypedFact {
             fn from(fact: &TypedFact) -> TypedFact {
                 fact.clone()
-            }
-        }
-        impl fmt::Debug for TypedFact {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
             }
         }
         pub trait DatumExt {
@@ -798,12 +784,12 @@ pub mod model {
                 inputs: &[OutletId],
             ) -> TractResult<TVec<OutletId>>;
         }
-        #[derive(Clone, Debug, Educe)]
+        #[derive(Clone, Educe)]
         #[educe(Hash)]
         pub struct Graph<F, O>
         where
             F: Fact + Hash + Clone + 'static,
-            O: fmt::Debug + fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             pub nodes: Vec<Node<F, O>>,
             pub inputs: Vec<OutletId>,
@@ -823,7 +809,7 @@ pub mod model {
         impl<F, O> Default for Graph<F, O>
         where
             F: Fact + Hash + Clone + 'static,
-            O: fmt::Debug + fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             fn default() -> Graph<F, O> {
                 Graph {
@@ -839,7 +825,7 @@ pub mod model {
         impl<F, O> Graph<F, O>
         where
             F: Fact + Hash + Clone + 'static,
-            O: fmt::Debug + fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
             Graph<F, O>: SpecialOps<F, O>,
         {
             pub fn add_source(
@@ -857,7 +843,7 @@ pub mod model {
         impl<F, O> Graph<F, O>
         where
             F: Fact + Hash + Clone + 'static,
-            O: fmt::Debug + fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             pub fn add_node(
                 &mut self,
@@ -936,9 +922,7 @@ pub mod model {
             }
             pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
                 let outlets = &self.nodes[outlet.node].outputs;
-                Ok(outlets
-                    .get(outlet.slot)
-                    .map(|o| &o.fact).unwrap())
+                Ok(outlets.get(outlet.slot).map(|o| &o.fact).unwrap())
             }
             pub fn outlet_label(&self, outlet: OutletId) -> Option<&str> {
                 self.outlet_labels.get(&outlet).map(|s| &**s)
@@ -946,40 +930,14 @@ pub mod model {
             pub fn eval_order(&self) -> TractResult<Vec<usize>> {
                 eval_order(self)
             }
-            #[cfg(all(debug_assertions, feature = "paranoid_assertions"))]
-            #[inline]
-            pub fn check_edges(&self) -> TractResult<()> {
-                for node_id in self.eval_order()? {
-                    let node = &self.nodes[node_id];
-                    for (ix, input) in node.inputs.iter().enumerate() {
-                        let prec = &self.nodes[input.node];
-                        if !prec.outputs[input.slot]
-                            .successors
-                            .contains(&InletId { node: node.id, slot: ix })
-                        {
-                            unimplemented!()
-                        }
-                    }
-                    for (ix, output) in node.outputs.iter().enumerate() {
-                        for succ in &output.successors {
-                            if self.nodes[succ.node].inputs[succ.slot] != OutletId::new(node.id, ix)
-                            {
-                                unimplemented!()
-                            }
-                        }
-                    }
-                }
-                Ok(())
-            }
             pub fn outlet_successors(&self, outlet: OutletId) -> &[InletId] {
-                &self.nodes[outlet.node].outputs[outlet.slot].successors
+                unimplemented!()
             }
         }
         impl<F: Fact + Clone + 'static, O> Graph<F, O>
         where
             F: Fact + Clone + 'static + From<std::sync::Arc<Tensor>> + Hash,
-            O: fmt::Debug
-                + fmt::Display
+            O: fmt::Display
                 + From<crate::ops::konst::Const>
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
@@ -1003,7 +961,6 @@ pub mod model {
         where
             F: Fact + Clone + 'static + std::hash::Hash + for<'a> std::convert::From<&'a F>,
             O: std::fmt::Display
-                + std::fmt::Debug
                 + Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
@@ -1013,35 +970,6 @@ pub mod model {
                 + for<'a> std::convert::From<&'a O>,
             Graph<F, O>: SpecialOps<F, O>,
         {
-            #[cfg(debug_assertions)]
-            pub fn check_compact(&self) -> TractResult<()> {
-                let order = self.eval_order()?;
-                let useless_sources = self
-                    .input_outlets()?
-                    .iter()
-                    .filter(|io| {
-                        self.outlet_successors(**io).len() == 0
-                            && !self.output_outlets().unwrap().contains(io)
-                    })
-                    .count();
-                if order.len() + useless_sources != self.nodes.len() {
-                    unimplemented!()
-                }
-                if (0..order.len()).any(|ix| order[ix] != ix) {
-                    unimplemented!()
-                }
-                let mut seen = std::collections::HashSet::new();
-                for (ix, n) in self.nodes.iter().enumerate() {
-                    if ix != n.id {
-                        unimplemented!()
-                    }
-                    if seen.contains(&n.name) {
-                        unimplemented!()
-                    }
-                    seen.insert(&n.name);
-                }
-                Ok(())
-            }
             pub fn compact(&mut self) -> TractResult<()> {
                 use crate::model::translator::Translate;
                 let mut result = crate::model::translator::IntoTranslator.translate_model(self)?;
@@ -1053,8 +981,8 @@ pub mod model {
     mod node {
         use crate::internal::*;
         use std::fmt;
-        use std::fmt::{Debug, Display};
-        #[derive(Debug, Clone, Educe)]
+        use std::fmt::{Display};
+        #[derive(Clone, Educe)]
         #[educe(Hash)]
         pub struct Node<F: Fact + Hash, O: Hash> {
             pub id: usize,
@@ -1072,7 +1000,7 @@ pub mod model {
         impl<F, NodeOp> Node<F, NodeOp>
         where
             F: Fact + Hash,
-            NodeOp: Debug + Display + AsRef<dyn Op> + AsMut<dyn Op> + AsMut<dyn Op> + Hash,
+            NodeOp: Display + AsRef<dyn Op> + AsMut<dyn Op> + AsMut<dyn Op> + Hash,
         {
             pub fn op(&self) -> &dyn Op {
                 self.op.as_ref()
@@ -1090,24 +1018,14 @@ pub mod model {
             pub fact: F,
             pub successors: TVec<InletId>,
         }
-        impl<F: Fact + Hash> fmt::Debug for Outlet<F> {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
-            }
-        }
         #[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
         pub struct OutletId {
             pub node: usize,
             pub slot: usize,
         }
-	impl OutletId {
-	    pub fn new(node: usize, slot: usize) -> OutletId {
+        impl OutletId {
+            pub fn new(node: usize, slot: usize) -> OutletId {
                 OutletId { node, slot }
-            }
-	}
-        impl fmt::Debug for OutletId {
-            fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-                unimplemented!()
             }
         }
         impl From<usize> for OutletId {
@@ -1128,11 +1046,11 @@ pub mod model {
     }
     pub mod order {
         use crate::internal::*;
-        use std::fmt::{Debug, Display};
+        use std::fmt::{Display};
         pub fn eval_order<F, O>(model: &super::Graph<F, O>) -> TractResult<Vec<usize>>
         where
             F: Fact + Hash + Clone + 'static,
-            O: Debug + Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             let inputs = model
                 .input_outlets()?
@@ -1154,7 +1072,7 @@ pub mod model {
         ) -> TractResult<Vec<usize>>
         where
             F: Fact + Hash + Clone + 'static,
-            O: Debug + Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             let mut done = std::collections::HashSet::new();
             let mut order: Vec<usize> = vec![];
@@ -1213,16 +1131,15 @@ pub mod model {
     }
     mod patch {
         use crate::internal::*;
-        use std::fmt::{Debug, Display};
+        use std::fmt::{Display};
         use std::ops::{Deref, DerefMut};
         use tract_data::itertools::{izip, Itertools};
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct ModelPatch<F, O>
         where
             F: Fact + Clone + 'static + Hash,
-            O: Display + Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
-            pub context: Vec<String>,
             pub dont_apply_twice: Option<String>,
             pub model: Graph<F, O>,
             pub inputs: HashMap<usize, usize>,
@@ -1233,11 +1150,10 @@ pub mod model {
         impl<F, O> Default for ModelPatch<F, O>
         where
             F: Fact + Clone + 'static + Hash,
-            O: Display + Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             fn default() -> ModelPatch<F, O> {
                 ModelPatch {
-                    context: vec![],
                     dont_apply_twice: None,
                     model: Graph::default(),
                     inputs: HashMap::default(),
@@ -1250,7 +1166,7 @@ pub mod model {
         impl<F, O> Deref for ModelPatch<F, O>
         where
             F: Fact + Clone + 'static + Hash,
-            O: Display + Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             type Target = Graph<F, O>;
             fn deref(&self) -> &Graph<F, O> {
@@ -1260,7 +1176,7 @@ pub mod model {
         impl<F, O> DerefMut for ModelPatch<F, O>
         where
             F: Fact + Clone + 'static + Hash,
-            O: Display + Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             fn deref_mut(&mut self) -> &mut Graph<F, O> {
                 &mut self.model
@@ -1269,12 +1185,9 @@ pub mod model {
         impl<F, O> ModelPatch<F, O>
         where
             F: Fact + Clone + 'static + Hash,
-            O: Display + Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O: Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
             Graph<F, O>: SpecialOps<F, O>,
         {
-            pub fn push_context(&mut self, s: impl Into<String>) {
-                self.context.push(s.into());
-            }
             pub fn tap_model(
                 &mut self,
                 model: &Graph<F, O>,
@@ -1402,7 +1315,7 @@ pub mod model {
                 debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
                 for (node, inputs) in all_inputs {
                     for (ix, input) in inputs.into_iter().enumerate() {
-                        target.add_edge(mapping[&input], InletId { node, slot: ix})?;
+                        target.add_edge(mapping[&input], InletId { node, slot: ix })?;
                     }
                 }
                 debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
@@ -1420,12 +1333,12 @@ pub mod model {
     pub mod translator {
         use crate::internal::*;
         use std::fmt;
-        pub trait Translate<TI1, O1, TI2, O2>: fmt::Debug
+        pub trait Translate<TI1, O1, TI2, O2>
         where
             TI1: Fact + Hash + Clone + 'static,
             TI2: Fact + Hash + Clone + 'static,
-            O1: fmt::Display + fmt::Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
-            O2: fmt::Display + fmt::Debug + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O1: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
+            O2: fmt::Display + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + Hash,
         {
             fn translate_node(
                 &self,
@@ -1445,9 +1358,7 @@ pub mod model {
                 let mut mapping = HashMap::new();
                 for old_id in source.eval_order()? {
                     let node = source.node(old_id);
-                    trace!("Translating {} {:?}", node, self);
-                    let outlets = self
-                        .translate_node(source, node, &mut target, &mapping)?;
+                    let outlets = self.translate_node(source, node, &mut target, &mapping)?;
                     for (ix, outlet) in outlets.into_iter().enumerate() {
                         mapping.insert(OutletId::new(node.id, ix), outlet);
                         if let Some(label) = source.outlet_label(OutletId::new(node.id, ix)) {
@@ -1471,7 +1382,6 @@ pub mod model {
                 Ok((target, mapping))
             }
         }
-        #[derive(Debug)]
         pub struct IntoTranslator;
         impl<TI1, O1, TI2, O2, EO, ETI> Translate<TI1, O1, TI2, O2> for IntoTranslator
         where
@@ -1479,7 +1389,6 @@ pub mod model {
             TI1: Fact + Hash + Clone + 'static,
             TI2: Fact + Hash + for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
             O1: fmt::Display
-                + fmt::Debug
                 + Clone
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
@@ -1488,7 +1397,6 @@ pub mod model {
                 + Hash,
             O2: fmt::Display
                 + for<'a> TryFrom<&'a O1, Error = ETI>
-                + fmt::Debug
                 + AsRef<dyn Op>
                 + AsMut<dyn Op>
                 + Clone
@@ -1527,7 +1435,13 @@ pub mod model {
                         .collect::<TractResult<TVec<_>>>()?;
                     let new_id = target.add_node(node.name.clone(), new_op, facts)?;
                     for (ix, o) in node.inputs.iter().enumerate() {
-                        target.add_edge(mapping[o], InletId { node: new_id, slot: ix })?
+                        target.add_edge(
+                            mapping[o],
+                            InletId {
+                                node: new_id,
+                                slot: ix,
+                            },
+                        )?
                     }
                     Ok(node
                         .outputs
@@ -1571,8 +1485,7 @@ pub mod model {
                             .iter()
                             .map(|o| self.outlet_fact(*o))
                             .collect::<TractResult<TVec<_>>>()?;
-                        let facts = op
-                            .output_facts(&input_facts)?;
+                        let facts = op.output_facts(&input_facts)?;
                         if input_facts.iter().all(|f| f.konst.is_some()) && op.is_stateless() {
                             unimplemented!()
                         }
@@ -1580,10 +1493,9 @@ pub mod model {
                     };
                     let output_facts = output_facts()?;
                     let id = self.add_node(&name, &op, output_facts)?;
-                    inputs
-                        .iter()
-                        .enumerate()
-                        .try_for_each(|(ix, i)| self.add_edge(*i, InletId { node: id, slot:ix }))?;
+                    inputs.iter().enumerate().try_for_each(|(ix, i)| {
+                        self.add_edge(*i, InletId { node: id, slot: ix })
+                    })?;
                     TractResult::Ok(
                         self.node(id)
                             .outputs
@@ -1600,9 +1512,6 @@ pub mod model {
                 self.declutter()?;
                 self.optimize()?;
                 Ok(self)
-            }
-            pub fn check_consistency(&self) -> TractResult<()> {
-                Ok(())
             }
             pub fn into_decluttered(mut self) -> TractResult<TypedModel> {
                 self.declutter()?;
@@ -1629,7 +1538,6 @@ pub mod model {
 pub mod optim {
     use crate::internal::*;
     use std::collections::HashSet;
-    use std::fmt::Debug;
     use tract_itertools::Itertools;
     mod op_optim {
         use super::OptimizerSession;
@@ -1655,17 +1563,11 @@ pub mod optim {
                     let node = &new.nodes()[id];
                     let patch = (self.1)(node.op.as_ref(), session, new, node)?;
                     if let Some(mut p) = patch {
-                        p.push_context(format!("{self:?} {node}"));
                         self.2 = ix + p.dont_apply_twice.is_some() as usize;
                         return Ok(Some(p));
                     }
                 }
                 Ok(None)
-            }
-        }
-        impl std::fmt::Debug for OpOptim {
-            fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(fmt, "{}", self.0)
             }
         }
         impl super::TypedPass for OpOptim {
@@ -1686,7 +1588,7 @@ pub mod optim {
         use crate::internal::*;
         use crate::ops::konst::Const;
         use crate::optim::OptimizerSession;
-        #[derive(Clone, Debug)]
+        #[derive(Clone)]
         pub struct PropConst;
         impl super::TypedPass for PropConst {
             fn reset(&mut self) -> TractResult<()> {
@@ -1724,7 +1626,7 @@ pub mod optim {
     }
     use self::prop_const::PropConst;
     use op_optim::OpOptim;
-    pub trait TypedPass: Debug + Send + Sync + dyn_clone::DynClone {
+    pub trait TypedPass: Send + Sync + dyn_clone::DynClone {
         fn reset(&mut self) -> TractResult<()>;
         fn next(
             &mut self,
@@ -1733,7 +1635,6 @@ pub mod optim {
         ) -> TractResult<Option<TypedModelPatch>>;
     }
     dyn_clone::clone_trait_object!(TypedPass);
-    #[derive(Debug)]
     pub struct Optimizer {
         passes: Vec<Box<dyn TypedPass>>,
         steps: Option<usize>,
@@ -1773,7 +1674,6 @@ pub mod optim {
             }
         }
     }
-    #[derive(Debug)]
     pub struct OptimizerSession<'o> {
         optimizer: &'o Optimizer,
         counter: usize,
@@ -1781,10 +1681,7 @@ pub mod optim {
     }
     impl<'o> OptimizerSession<'o> {
         pub fn optimize(&mut self, model: &mut TypedModel) -> TractResult<()> {
-            model
-                .check_consistency()?;
-            model
-                .compact()?;
+            model.compact()?;
             for i in 0.. {
                 let old = self.counter;
                 self.run_all_passes(i, model)?;
@@ -1800,8 +1697,6 @@ pub mod optim {
             for p in passes.iter_mut() {
                 self.run_one_pass_outer(i, p.as_mut(), model)?;
                 model.compact()?;
-                model
-                    .check_consistency()?;
             }
             Ok(())
         }
@@ -1817,8 +1712,7 @@ pub mod optim {
                 if self.counter == old_counter {
                     return Ok(());
                 }
-                model
-                    .compact()?;
+                model.compact()?;
             }
         }
         pub fn run_one_pass_inner(
@@ -1828,34 +1722,10 @@ pub mod optim {
             model: &mut TypedModel,
         ) -> TractResult<()> {
             p.reset()?;
-            if let Some(steps) = self.optimizer.steps {
-                unimplemented!()
-            }
             while let Some(mut patch) = p.next(self, model)? {
-                patch.push_context(format!("{p:?}/{i}"));
-                patch
-                    .model
-                    .check_consistency()?;
-                model
-                    .check_consistency()?;
-                if let Some(watchdog) = patch.dont_apply_twice.take() {
-                    unimplemented!()
-                }
-                debug!(
-                    "applying patch #{}: {}",
-                    self.counter,
-                    patch.context.iter().rev().join(" >> "),
-                );
                 patch.apply(model)?;
-                model
-                    .check_consistency()?;
                 self.counter += 1;
-                if let Some(steps) = self.optimizer.steps {
-                    unimplemented!()
-                }
             }
-            model
-                .check_consistency()?;
             Ok(())
         }
     }
