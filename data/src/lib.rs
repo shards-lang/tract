@@ -1,47 +1,24 @@
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 use ndarray::*;
-pub fn tensor0(x: f32) -> Tensor {
-    Tensor {
-        shape: vec![],
-        data: vec![x],
-    }
-}
 pub struct Tensor {
     shape: Vec<usize>,
     data: Vec<f32>,
 }
 impl Tensor {
-    pub fn zero(shape: &[usize]) -> anyhow::Result<Tensor> {
+    pub fn zero(shape: &[usize]) -> Tensor {
         let data = vec![0.0f32; shape.iter().cloned().product::<usize>()];
-        let mut tensor = Tensor {
+        Tensor {
             shape: shape.into(),
             data,
-        };
-        Ok(tensor)
+        }
     }
     #[inline]
     pub fn shape(&self) -> &[usize] {
         &self.shape
     }
-    pub fn as_slice_unchecked(&self) -> &[f32] {
-        &self.data
-    }
-    fn as_uniform_t(&self) -> Tensor {
-        let v = self.as_slice_unchecked()[0].clone();
-        tensor0(v)
-    }
-    pub fn as_uniform(&self) -> Option<Tensor> {
-        let mut t = Tensor::as_uniform_t(self);
-        Some(t)
-    }
     fn into_arc_tensor(self) -> Arc<Tensor> {
         Arc::new(self)
-    }
-}
-impl PartialEq for Tensor {
-    fn eq(&self, _other: &Tensor) -> bool {
-        unimplemented!()
     }
 }
 #[macro_use]
@@ -73,12 +50,12 @@ impl TypedOp for Const {
         unimplemented!()
     }
 }
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone)]
 pub enum BinOp {
     Min,
     Max,
 }
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy)]
 pub enum OutputStoreSpec {
     View {
         m_axis: usize,
@@ -91,7 +68,7 @@ pub enum OutputStoreSpec {
         n: usize,
     },
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone)]
 pub enum ProtoFusedSpec {
     BinScalar(AttrOrInput, BinOp),
     BinPerRow(AttrOrInput, BinOp),
@@ -164,7 +141,7 @@ impl MatMulUnary {
         let mut patch = TypedModelPatch::default();
         let mut wire = patch.tap_model(model, node.inputs[0])?;
         let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            let pa = Tensor::zero(&[64]).unwrap();
+            let pa = Tensor::zero(&[64]);
             (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
         });
         wire = patch.wire_node(format!("{}.pack", &*node.name), MatMatMulPack {}, &[wire])?[0];
@@ -180,27 +157,17 @@ pub struct MatMatMulPack {}
 impl Op for MatMatMulPack {}
 impl TypedOp for MatMatMulPack {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![fact(self.output_shape(&inputs[0].shape))])
+        Ok(vec![fact([1])])
     }
     as_op!();
-}
-impl MatMatMulPack {
-    fn output_shape(&self, _input: &[usize]) -> Vec<usize> {
-        vec![1]
-    }
 }
 pub fn compute_shape(
     ashape: &[usize],
     bshape: &[usize],
 ) -> TractResult<(usize, usize, usize, Vec<usize>)> {
-    let a_shape_bc: Vec<usize> = vec![];
-    let b_shape_bc = vec![];
-    let mut c_shape = multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
-    let (m, ka) = (ashape[0].clone(), ashape[1].clone());
-    let (_, n) = (bshape[0].clone(), bshape[1].clone());
-    c_shape.insert(0, n.clone());
-    c_shape.insert(1, m.clone());
-    Ok((m, ka, n, c_shape))
+    let (m, k) = (ashape[0], ashape[1]);
+    let n = bshape[1];
+    Ok((m, k, n, vec!(n, m)))
 }
 #[derive(Clone)]
 pub struct TypedSource {}
@@ -254,15 +221,12 @@ impl AsMut<dyn Op> for Box<dyn TypedOp> {
         unimplemented!()
     }
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub enum AttrOrInput {
     Attr(Arc<Tensor>),
     Input(usize),
 }
-pub fn multi_broadcast(_shapes: &[impl AsRef<[usize]>]) -> Option<Vec<usize>> {
-    Some(vec![])
-}
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct ShapeFact {
     dims: Vec<usize>,
 }
@@ -285,7 +249,7 @@ impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
         ShapeFact::from_dims(it)
     }
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct TypedFact {
     pub shape: ShapeFact,
     pub konst: Option<Arc<Tensor>>,
@@ -713,8 +677,6 @@ where
             }
             all_inputs.insert(added_node_id, inputs);
         }
-        debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
-        debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
         for (outlet, by) in shunt_outlet_by {
             let replace_by = mapping[&by];
             for o in target.outputs.iter_mut() {
@@ -723,20 +685,14 @@ where
                 }
             }
         }
-        debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
-        debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
         for (node, inputs) in all_inputs {
             for (ix, input) in inputs.into_iter().enumerate() {
                 target.add_edge(mapping[&input], InletId { node, slot: ix })?;
             }
         }
-        debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
-        debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
         for node in obliterate {
             target.node_mut(node).op = target.create_dummy();
         }
-        debug_assert_eq!(target.input_outlets()?.len(), prior_target_inputs);
-        debug_assert_eq!(target.output_outlets()?.len(), prior_target_outputs);
         target.set_input_outlets(&model_input_outlets)?;
         Ok(())
     }
@@ -885,14 +841,13 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
         }
     }
 }
-pub use std::borrow::Cow;
 pub use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
     let wire = model.add_source("input", fact([1usize, 1])).unwrap();
     let a = model
-        .add_const("a", Tensor::zero(&[2, 1]).unwrap().into_arc_tensor())
+        .add_const("a", Tensor::zero(&[2, 1]).into_arc_tensor())
         .unwrap();
     let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
