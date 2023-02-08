@@ -35,11 +35,6 @@ pub mod ops {
         impl Op for Dummy {
             op_as_typed_op!();
         }
-        impl EvalOp for Dummy {
-            fn is_stateless(&self) -> bool {
-                unimplemented!()
-            }
-        }
         impl TypedOp for Dummy {
             as_op!();
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -53,11 +48,6 @@ pub mod ops {
         pub struct Const(pub Arc<Tensor>);
         impl Op for Const {
             op_as_typed_op!();
-        }
-        impl EvalOp for Const {
-            fn is_stateless(&self) -> bool {
-                true
-            }
         }
         impl TypedOp for Const {
             as_op!();
@@ -104,11 +94,6 @@ pub mod ops {
             impl Op for LirMatMulUnary {
                 op_as_typed_op!();
             }
-            impl EvalOp for LirMatMulUnary {
-                fn is_stateless(&self) -> bool {
-                    unimplemented!()
-                }
-            }
             impl TypedOp for LirMatMulUnary {
                 fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                     Ok(tvec!(f32::fact([1, 2])))
@@ -124,11 +109,6 @@ pub mod ops {
             }
             impl Op for MatMul {
                 op_as_typed_op!();
-            }
-            impl EvalOp for MatMul {
-                fn is_stateless(&self) -> bool {
-                    true
-                }
             }
             impl TypedOp for MatMul {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -183,11 +163,6 @@ pub mod ops {
             }
             impl Op for MatMulUnary {
                 op_as_typed_op!();
-            }
-            impl EvalOp for MatMulUnary {
-                fn is_stateless(&self) -> bool {
-                    true
-                }
             }
             impl TypedOp for MatMulUnary {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
@@ -247,11 +222,6 @@ pub mod ops {
             impl Op for MatMatMulPack {
                 op_as_typed_op!();
             }
-            impl EvalOp for MatMatMulPack {
-                fn is_stateless(&self) -> bool {
-                    unimplemented!()
-                }
-            }
             impl TypedOp for MatMatMulPack {
                 fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                     Ok(tvec!(inputs[0]
@@ -261,7 +231,7 @@ pub mod ops {
                 as_op!();
             }
             impl MatMatMulPack {
-                fn output_shape<D: DimLike>(&self, input: &[D]) -> TVec<D> {
+                fn output_shape<D: DimLike>(&self, _input: &[D]) -> TVec<D> {
                     tvec!(1.into())
                 }
             }
@@ -331,48 +301,17 @@ pub mod ops {
             bshape: &[D],
             axes: MatMulAxes,
         ) -> TractResult<(D, D, D, TVec<D>)> {
-            let a_shape_bc: TVec<D> = ashape
-                .iter()
-                .enumerate()
-                .filter_map(|(ix, dim)| {
-                    if ix != axes.a_m && ix != axes.a_k {
-                        unimplemented!()
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let b_shape_bc = bshape
-                .iter()
-                .enumerate()
-                .filter_map(|(ix, dim)| {
-                    if ix != axes.b_k && ix != axes.b_n {
-                        unimplemented!()
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+            let a_shape_bc: TVec<D> = tvec!();
+            let b_shape_bc = tvec!();
             let mut c_shape = crate::broadcast::multi_broadcast(&[a_shape_bc, b_shape_bc]).unwrap();
             let (m, ka) = (ashape[axes.a_m].clone(), ashape[axes.a_k].clone());
-            let (kb, n) = (bshape[axes.b_k].clone(), bshape[axes.b_n].clone());
-            if ka != kb {
-                unimplemented!()
-            }
-            if axes.c_m < axes.c_n {
-                unimplemented!()
-            } else {
+            let (_, n) = (bshape[axes.b_k].clone(), bshape[axes.b_n].clone());
                 c_shape.insert(axes.c_n, n.clone());
                 c_shape.insert(axes.c_m, m.clone());
-            }
             Ok((m, ka, n, c_shape))
         }
         pub fn output_type(input: DatumType) -> DatumType {
-            if input.is_float() {
-                input
-            } else {
-                unimplemented!()
-            }
+		input
         }
     }
     pub mod source {
@@ -384,11 +323,6 @@ pub mod ops {
         impl Op for TypedSource {
             op_as_typed_op!();
         }
-        impl EvalOp for TypedSource {
-            fn is_stateless(&self) -> bool {
-                false
-            }
-        }
         impl TypedOp for TypedSource {
             fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<TVec<TypedFact>> {
                 unimplemented!()
@@ -398,21 +332,11 @@ pub mod ops {
     }
     use crate::internal::*;
     use crate::optim::OptimizerSession;
-    pub trait EvalOp {
-        #[allow(unused_variables)]
-        fn eval(&self, inputs: TVec<TValue>) -> TractResult<TVec<TValue>> {
-            unimplemented!()
-        }
-        fn is_stateless(&self) -> bool;
-    }
-    pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp {
-        fn same_as(&self, _other: &dyn Op) -> bool {
-            false
-        }
+    pub trait Op: dyn_clone::DynClone + Send + Sync + 'static + Downcast {
         fn as_typed(&self) -> Option<&dyn TypedOp>;
     }
     pub trait TypedOp:
-        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast + EvalOp
+        Op + dyn_clone::DynClone + Send + Sync + 'static + Downcast
     {
         fn as_op(&self) -> &dyn Op;
         fn as_op_mut(&mut self) -> &mut dyn Op;
@@ -477,18 +401,11 @@ pub mod ops {
 }
 mod broadcast {
     use tract_data::internal::*;
-    pub fn multi_broadcast<D>(shapes: &[impl AsRef<[D]>]) -> Option<TVec<D>>
+    pub fn multi_broadcast<D>(_shapes: &[impl AsRef<[D]>]) -> Option<TVec<D>>
     where
         D: DimLike,
     {
-        let one = D::one();
-        let len = shapes.iter().map(|shape| shape.as_ref().len()).max()?;
-        let mut shape: TVec<D> = tvec!();
-        for i in 0..len {
-            unimplemented!()
-        }
-        shape.reverse();
-        Some(shape)
+        Some(tvec!())
     }
 }
 pub mod model {
@@ -553,10 +470,6 @@ pub mod model {
         }
         pub trait Fact: Downcast + dyn_clone::DynClone + Send + Sync + 'static {
             fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>>;
-            fn matches(&self, t: &Tensor, symbols: Option<&SymbolValues>) -> TractResult<bool> {
-                unimplemented!()
-            }
-            fn same_as(&self, _other: &dyn Fact) -> bool;
             fn compatible_with(&self, _other: &dyn Fact) -> bool;
             fn datum_type(&self) -> Option<DatumType>;
         }
@@ -594,11 +507,6 @@ pub mod model {
                 self.shape.rank()
             }
             pub fn consistent(&self) -> TractResult<()> {
-                if let Some(k) = &self.konst {
-                    if !self.matches(k.as_ref(), None)? {
-                        unimplemented!()
-                    }
-                }
                 if let Some(u) = &self.uniform {
                     if self.datum_type != u.datum_type() {
                         unimplemented!()
@@ -618,25 +526,6 @@ pub mod model {
         }
         impl Fact for TypedFact {
             fn to_typed_fact(&self) -> TractResult<Cow<TypedFact>> {
-                unimplemented!()
-            }
-            fn matches(&self, t: &Tensor, symbols: Option<&SymbolValues>) -> TractResult<bool> {
-                if self.datum_type != t.datum_type() || self.shape.len() != t.rank() {
-                    unimplemented!()
-                }
-                for i in 0..t.rank() {
-                    if let Ok(dim) = self.shape[i]
-                        .eval(symbols.unwrap_or(&SymbolValues::default()))
-                        .to_usize()
-                    {
-                        if dim != t.shape()[i] {
-                            unimplemented!()
-                        }
-                    }
-                }
-                Ok(true)
-            }
-            fn same_as(&self, other: &dyn Fact) -> bool {
                 unimplemented!()
             }
             fn compatible_with(&self, other: &dyn Fact) -> bool {
@@ -800,9 +689,6 @@ pub mod model {
                 Ok(id)
             }
             pub fn add_edge(&mut self, outlet: OutletId, inlet: InletId) -> TractResult<()> {
-                if let Some(previous) = self.nodes[inlet.node].inputs.get(inlet.slot).cloned() {
-                    unimplemented!()
-                }
                 {
                     let prec = &mut self.nodes[outlet.node];
                     prec.outputs[outlet.slot].successors.push(inlet);
@@ -811,10 +697,6 @@ pub mod model {
                 #[allow(clippy::comparison_chain)]
                 if inlet.slot == succ.inputs.len() {
                     succ.inputs.push(outlet);
-                } else if inlet.slot < succ.inputs.len() {
-                    unimplemented!()
-                } else {
-                    unimplemented!()
                 }
                 Ok(())
             }
@@ -1039,7 +921,6 @@ pub mod model {
     mod patch {
         use crate::internal::*;
         use std::ops::{Deref, DerefMut};
-        use tract_data::itertools::{izip, Itertools};
         #[derive(Clone)]
         pub struct ModelPatch<F, O>
         where
@@ -1109,12 +990,9 @@ pub mod model {
             }
             pub fn shunt_outside(
                 &mut self,
-                model: &Graph<F, O>,
                 outlet: OutletId,
                 by: OutletId,
             ) -> TractResult<()> {
-                let original_fact = model.outlet_fact(outlet)?;
-                let new_fact = self.model.outlet_fact(by)?;
                 self.shunt_outlet_by.insert(outlet, by);
                 Ok(())
             }
@@ -1136,7 +1014,7 @@ pub mod model {
                     .collect::<TractResult<TVec<_>>>()?;
                 let wires = patch.wire_node(&node.name, new_op, &inputs)?;
                 for (ix, o) in wires.iter().enumerate() {
-                    patch.shunt_outside(patched_model, OutletId::new(node.id, ix), *o)?;
+                    patch.shunt_outside( OutletId::new(node.id, ix), *o)?;
                 }
                 patch.obliterate(node.id)?;
                 Ok(patch)
@@ -1345,9 +1223,6 @@ pub mod model {
                             .map(|o| self.outlet_fact(*o))
                             .collect::<TractResult<TVec<_>>>()?;
                         let facts = op.output_facts(&input_facts)?;
-                        if input_facts.iter().all(|f| f.konst.is_some()) && op.is_stateless() {
-                            unimplemented!()
-                        }
                         Ok(facts)
                     };
                     let output_facts = output_facts()?;
@@ -1396,7 +1271,6 @@ pub mod model {
 }
 pub mod optim {
     use crate::internal::*;
-    use std::collections::HashSet;
     mod op_optim {
         use super::OptimizerSession;
         use crate::internal::*;
@@ -1563,7 +1437,7 @@ pub mod prelude {
 }
 pub mod internal {
     pub use crate::model::*;
-    pub use crate::ops::{AttrOrInput, EvalOp, Op};
+    pub use crate::ops::{AttrOrInput, Op};
     pub use crate::prelude::*;
     pub use std::borrow::Cow;
     pub use std::collections::HashMap;
@@ -1573,7 +1447,6 @@ pub mod internal {
 fn crasher_monterey_matmul() {
     use crate::internal::*;
     use crate::ops::matmul::*;
-    use tract_ndarray::prelude::*;
     let mut model = TypedModel::default();
     let wire = model.add_source("input", f32::fact(&[1usize, 1])).unwrap();
     let a = model
