@@ -1,16 +1,15 @@
-pub type TractResult<T> = Result<T,()>;
+type TractResult<T> = Result<T, ()>;
 use ndarray::*;
 use std::sync::Arc;
 #[derive(Clone)]
-pub struct Const;
-impl TypedOp for Const {}
+struct Const;
 #[derive(Copy, Clone)]
-pub enum BinOp {
+enum BinOp {
     Min,
     Max,
 }
 #[derive(Clone, Copy)]
-pub enum OutputStoreSpec {
+enum OutputStoreSpec {
     View {
         m_axis: usize,
     },
@@ -23,7 +22,7 @@ pub enum OutputStoreSpec {
     },
 }
 #[derive(Clone)]
-pub enum ProtoFusedSpec {
+enum ProtoFusedSpec {
     BinScalar(AttrOrInput, BinOp),
     BinPerRow(AttrOrInput, BinOp),
     BinPerCol(AttrOrInput, BinOp),
@@ -32,18 +31,12 @@ pub enum ProtoFusedSpec {
     Store,
 }
 #[derive(Clone)]
-pub struct LirMatMulUnary {
-    pub micro_ops: ArrayD<(Arc<()>, Vec<ProtoFusedSpec>)>,
-}
-impl TypedOp for LirMatMulUnary {}
-#[derive(Clone)]
-pub struct MatMulUnary {
-}
+struct MatMulUnary {}
 impl TypedOp for MatMulUnary {}
 #[derive(Clone)]
-pub struct TypedSource {}
+struct TypedSource {}
 impl TypedOp for TypedSource {}
-pub trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {}
+trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {}
 dyn_clone::clone_trait_object!(TypedOp);
 impl<O: TypedOp> From<O> for Box<dyn TypedOp> {
     fn from(it: O) -> Box<dyn TypedOp> {
@@ -56,16 +49,16 @@ impl<'a> From<&'a Box<dyn TypedOp>> for Box<dyn TypedOp> {
     }
 }
 #[derive(Clone)]
-pub enum AttrOrInput {
+enum AttrOrInput {
     Attr(Arc<()>),
     Input(usize),
 }
-pub trait SpecialOps<O> {
+trait SpecialOps<O> {
     fn create_source(&self) -> O;
     fn wire_node(&mut self, op: impl Into<O>, inputs: &[OutletId]) -> TractResult<Vec<OutletId>>;
 }
 #[derive(Clone)]
-pub struct Graph<O>
+struct Graph<O>
 where
     O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
@@ -102,13 +95,10 @@ impl<O> Graph<O>
 where
     O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
-    pub fn add_node(
-        &mut self,
-        op: impl Into<O>,
-    ) -> TractResult<usize> {
+    pub fn add_node(&mut self, op: impl Into<O>) -> TractResult<usize> {
         let op = op.into();
         let id = self.nodes.len();
-        let outputs = vec!( Outlet { successors: vec![] });
+        let outputs = vec![Outlet { successors: vec![] }];
         let node = Node {
             id,
             op,
@@ -130,16 +120,8 @@ where
         Ok(())
     }
 }
-impl<O> Graph<O>
-where
-    O: From<Const> + AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
-{
-    pub fn add_const(&mut self) -> TractResult<OutletId> {
-        self.add_node(Const).map(|id| id.into())
-    }
-}
 #[derive(Clone)]
-pub struct Node<O> {
+struct Node<O> {
     pub id: usize,
     pub inputs: Vec<OutletId>,
     #[cfg_attr(feature = "serialize", serde(skip))]
@@ -147,11 +129,11 @@ pub struct Node<O> {
     pub outputs: Vec<Outlet>,
 }
 #[derive(Clone, Default)]
-pub struct Outlet {
+struct Outlet {
     pub successors: Vec<InletId>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct OutletId {
+struct OutletId {
     pub node: usize,
     pub slot: usize,
 }
@@ -160,19 +142,14 @@ impl OutletId {
         OutletId { node, slot }
     }
 }
-impl From<usize> for OutletId {
-    fn from(node: usize) -> OutletId {
-        OutletId::new(node, 0)
-    }
-}
 #[derive(Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
-pub struct InletId {
+struct InletId {
     pub node: usize,
     pub slot: usize,
 }
 use std::ops::{Deref, DerefMut};
 #[derive(Clone)]
-pub struct ModelPatch<O>
+struct ModelPatch<O>
 where
     O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
@@ -291,8 +268,8 @@ where
         Ok(())
     }
 }
-pub type TypedModel = Graph<Box<dyn TypedOp>>;
-pub type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
+type TypedModel = Graph<Box<dyn TypedOp>>;
+type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
 impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
     fn create_source(&self) -> Box<dyn TypedOp> {
         Box::new(TypedSource {})
@@ -320,18 +297,18 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
         }
     }
 }
-pub use std::collections::HashMap;
+use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
     let source = model.add_source().unwrap();
     let mm = model.wire_node(MatMulUnary {}, &[source]).unwrap()[0];
-    model.outputs = vec!(mm);
+    model.outputs = vec![mm];
     let patch = TypedModelPatch::replace_single_op(
         &model,
         &model.nodes[mm.node],
         &[source],
-        MatMulUnary {  },
+        MatMulUnary {},
     )
     .unwrap();
     patch.apply(&mut model).unwrap();
