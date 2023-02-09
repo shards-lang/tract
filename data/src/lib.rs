@@ -45,7 +45,6 @@ trait SpecialOps<O> {
     fn create_source(&self) -> O;
     fn wire_node(&mut self, op: O, inputs: &[OutletId]) -> TractResult<Vec<OutletId>>;
 }
-#[derive(Clone)]
 struct Graph<O>
 {
     pub nodes: Vec<Node<O>>,
@@ -76,24 +75,17 @@ where
 }
 impl<O> Graph<O>
 {
-    pub fn add_node(&mut self, op: impl Into<O>) -> TractResult<usize> {
-        let op = op.into();
+    pub fn add_node(&mut self, op: O) -> TractResult<usize> {
         let id = self.nodes.len();
-        let outputs = vec![Outlet { successors: vec![] }];
         let node = Node {
             id,
             op,
             inputs: vec![],
-            outputs,
         };
         self.nodes.push(node);
         Ok(id)
     }
     pub fn add_edge(&mut self, outlet: OutletId, inlet: InletId) -> TractResult<()> {
-        {
-            let prec = &mut self.nodes[outlet.node];
-            prec.outputs[outlet.slot].successors.push(inlet);
-        }
         let succ = &mut self.nodes[inlet.node];
         if inlet.slot == succ.inputs.len() {
             succ.inputs.push(outlet);
@@ -101,17 +93,14 @@ impl<O> Graph<O>
         Ok(())
     }
 }
-#[derive(Clone)]
 struct Node<O> {
     pub id: usize,
     pub inputs: Vec<OutletId>,
     #[cfg_attr(feature = "serialize", serde(skip))]
     pub op: O,
-    pub outputs: Vec<Outlet>,
 }
 #[derive(Clone, Default)]
 struct Outlet {
-    pub successors: Vec<InletId>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct OutletId {
@@ -129,7 +118,6 @@ struct InletId {
     pub slot: usize,
 }
 use std::ops::{Deref, DerefMut};
-#[derive(Clone)]
 struct ModelPatch<O>
 {
     pub model: Graph<O>,
@@ -198,16 +186,12 @@ where
                 id: patch_node_id,
                 inputs,
                 op,
-                outputs,
             } = node;
-            let n_outputs = outputs.len();
             let added_node_id = target.add_node(op)?;
-            for ix in 0..n_outputs {
-                mapping.insert(
-                    OutletId::new(patch_node_id, ix),
-                    OutletId::new(added_node_id, ix),
-                );
-            }
+	mapping.insert(
+	    OutletId::new(patch_node_id, 0),
+	    OutletId::new(added_node_id, 0),
+	);
             all_inputs.insert(added_node_id, inputs);
         }
         for (outlet, by) in shunt_outlet_by {
@@ -244,14 +228,7 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
                 .iter()
                 .enumerate()
                 .try_for_each(|(ix, i)| self.add_edge(*i, InletId { node: id, slot: ix }))?;
-            TractResult::Ok(
-                self.nodes[id]
-                    .outputs
-                    .iter()
-                    .enumerate()
-                    .map(|(ix, _)| OutletId::new(id, ix))
-                    .collect(),
-            )
+            TractResult::Ok(vec!(OutletId::new(id, 0)))
         }
     }
 }
