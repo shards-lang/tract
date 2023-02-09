@@ -1,26 +1,7 @@
 pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 use ndarray::*;
-pub struct Tensor {
-    shape: Vec<usize>,
-    data: Vec<f32>,
-}
-impl Tensor {
-    pub fn zero(shape: &[usize]) -> Tensor {
-        let data = vec![0.0f32; shape.iter().cloned().product::<usize>()];
-        Tensor {
-            shape: shape.into(),
-            data,
-        }
-    }
-    #[inline]
-    pub fn shape(&self) -> &[usize] {
-        &self.shape
-    }
-    fn into_arc_tensor(self) -> Arc<Tensor> {
-        Arc::new(self)
-    }
-}
+pub struct Tensor;
 use std::sync::Arc;
 macro_rules! as_op {
     () => {
@@ -84,7 +65,7 @@ pub struct LirMatMulUnary {
 impl Op for LirMatMulUnary {}
 impl TypedOp for LirMatMulUnary {
     fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![fact([1, 2])])
+        Ok(vec![TypedFact])
     }
     as_op!();
 }
@@ -93,19 +74,18 @@ pub struct MatMul {}
 impl Op for MatMul {}
 impl TypedOp for MatMul {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![fact([2,1])])
+        Ok(vec![TypedFact])
     }
     fn declutter(
         &self,
         model: &TypedModel,
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
-        let konst = model.outlet_fact(node.inputs[0])?.konst.clone().unwrap();
         TypedModelPatch::replace_single_op(
             model,
             node,
             &node.inputs[1..2],
-            MatMulUnary { a: konst },
+            MatMulUnary { a: Arc::new(Tensor) },
         )
         .map(Some)
     }
@@ -118,7 +98,7 @@ pub struct MatMulUnary {
 impl Op for MatMulUnary {}
 impl TypedOp for MatMulUnary {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![fact([2,1])])
+        Ok(vec![TypedFact])
     }
     fn codegen(
         &self,
@@ -126,8 +106,7 @@ impl TypedOp for MatMulUnary {
         node: &TypedNode,
     ) -> TractResult<Option<TypedModelPatch>> {
         let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            let pa = Tensor::zero(&[64]);
-            (pa.into_arc_tensor(), vec![ProtoFusedSpec::Store])
+            (Arc::new(Tensor), vec![ProtoFusedSpec::Store])
         });
         TypedModelPatch::replace_single_op(
             model,
@@ -143,7 +122,7 @@ pub struct MatMatMulPack {}
 impl Op for MatMatMulPack {}
 impl TypedOp for MatMatMulPack {
     fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![fact([1])])
+        Ok(vec![TypedFact])
     }
     as_op!();
 }
@@ -206,66 +185,10 @@ pub enum AttrOrInput {
     Input(usize),
 }
 #[derive(Clone)]
-pub struct ShapeFact {
-    dims: Vec<usize>,
-}
-impl ShapeFact {
-    pub fn from_dims<T: IntoIterator<Item = usize>>(it: T) -> ShapeFact {
-        let mut dims = ShapeFact {
-            dims: it.into_iter().collect(),
-        };
-        dims
-    }
-}
-impl std::ops::Deref for ShapeFact {
-    type Target = [usize];
-    fn deref(&self) -> &[usize] {
-        &self.dims
-    }
-}
-impl<T: IntoIterator<Item = usize>> From<T> for ShapeFact {
-    fn from(it: T) -> ShapeFact {
-        ShapeFact::from_dims(it)
-    }
-}
-#[derive(Clone)]
-pub struct TypedFact {
-    pub shape: ShapeFact,
-    pub konst: Option<Arc<Tensor>>,
-}
-impl TypedFact {
-    pub fn dt_shape<S>(shape: S) -> TypedFact
-    where
-        S: Into<ShapeFact>,
-    {
-        TypedFact {
-            shape: shape.into(),
-            konst: None,
-        }
-    }
-}
-impl From<Arc<Tensor>> for TypedFact {
-    fn from(t: Arc<Tensor>) -> TypedFact {
-        TypedFact {
-            shape: ShapeFact::from_dims(t.shape().to_vec()),
-            konst: Some(t),
-        }
-    }
-}
-impl<'a> From<&'a TypedFact> for TypedFact {
-    fn from(fact: &TypedFact) -> TypedFact {
-        fact.clone()
-    }
-}
-fn fact<S>(shape: S) -> TypedFact
-where
-    S: Into<ShapeFact>,
-{
-    TypedFact::dt_shape(shape)
-}
-pub trait SpecialOps<F, O> {
+pub struct TypedFact;
+pub trait SpecialOps<O> {
     fn create_dummy(&self) -> O;
-    fn create_source(&self, fact: F) -> O;
+    fn create_source(&self, fact: TypedFact) -> O;
     fn is_source(op: &O) -> bool;
     fn wire_node(
         &mut self,
@@ -275,21 +198,19 @@ pub trait SpecialOps<F, O> {
     ) -> TractResult<Vec<OutletId>>;
 }
 #[derive(Clone)]
-pub struct Graph<F, O>
+pub struct Graph<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    pub nodes: Vec<Node<F, O>>,
+    pub nodes: Vec<Node<O>>,
     pub inputs: Vec<OutletId>,
     pub outputs: Vec<OutletId>,
 }
-impl<F, O> Default for Graph<F, O>
+impl<O> Default for Graph<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    fn default() -> Graph<F, O> {
+    fn default() -> Graph<O> {
         Graph {
             nodes: vec![],
             inputs: vec![],
@@ -297,13 +218,12 @@ where
         }
     }
 }
-impl<F, O> Graph<F, O>
+impl<O> Graph<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
-    Graph<F, O>: SpecialOps<F, O>,
+    Graph<O>: SpecialOps<O>,
 {
-    pub fn add_source(&mut self, name: impl Into<String>, fact: F) -> TractResult<OutletId> {
+    pub fn add_source(&mut self, name: impl Into<String>, fact: TypedFact) -> TractResult<OutletId> {
         let source = self.create_source(fact.clone());
         let id = self.add_node(name, source, vec![fact])?;
         let id = OutletId::new(id, 0);
@@ -311,24 +231,22 @@ where
         Ok(id)
     }
 }
-impl<F, O> Graph<F, O>
+impl<O> Graph<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     pub fn add_node(
         &mut self,
         name: impl Into<String>,
         op: impl Into<O>,
-        output_facts: Vec<F>,
+        output_facts: Vec<TypedFact>,
     ) -> TractResult<usize> {
         let op = op.into();
         let name = name.into();
         let id = self.nodes.len();
         let outputs = output_facts
             .into_iter()
-            .map(|fact| Outlet {
-                fact,
+            .map(|_fact| Outlet {
                 successors: vec![],
             })
             .collect();
@@ -367,31 +285,28 @@ where
         self.outputs = outputs.to_vec();
         Ok(())
     }
-    pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&F> {
+    pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&TypedFact> {
         let outlets = &self.nodes[outlet.node].outputs;
-        Ok(outlets.get(outlet.slot).map(|o| &o.fact).unwrap())
+        Ok(outlets.get(outlet.slot).map(|o| &TypedFact).unwrap())
     }
     pub fn eval_order(&self) -> TractResult<Vec<usize>> {
         eval_order(self)
     }
 }
-impl<F: Clone + 'static, O> Graph<F, O>
+impl<O> Graph<O>
 where
-    F: Clone + 'static + From<std::sync::Arc<Tensor>>,
     O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     pub fn add_const(&mut self, name: impl Into<String>, v: Arc<Tensor>) -> TractResult<OutletId> {
-        let fact = F::from(v.clone());
         let name = name.into();
-        self.add_node(name, Const(v), vec![fact])
+        self.add_node(name, Const(v), vec![TypedFact])
             .map(|id| id.into())
     }
 }
-impl<F, O> Graph<F, O>
+impl<O> Graph<O>
 where
-    F: Clone + 'static + for<'a> std::convert::From<&'a F>,
     O: Clone + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + for<'a> std::convert::From<&'a O>,
-    Graph<F, O>: SpecialOps<F, O>,
+    Graph<O>: SpecialOps<O>,
 {
     pub fn compact(&mut self) -> TractResult<()> {
         let mut result = IntoTranslator.translate_model(self)?;
@@ -400,17 +315,16 @@ where
     }
 }
 #[derive(Clone)]
-pub struct Node<F, O> {
+pub struct Node<O> {
     pub id: usize,
     pub name: String,
     pub inputs: Vec<OutletId>,
     #[cfg_attr(feature = "serialize", serde(skip))]
     pub op: O,
-    pub outputs: Vec<Outlet<F>>,
+    pub outputs: Vec<Outlet>,
 }
 #[derive(Clone, Default)]
-pub struct Outlet<F> {
-    pub fact: F,
+pub struct Outlet {
     pub successors: Vec<InletId>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -438,9 +352,8 @@ pub struct InletId {
     pub node: usize,
     pub slot: usize,
 }
-pub fn eval_order<F, O>(model: &Graph<F, O>) -> TractResult<Vec<usize>>
+pub fn eval_order<O>(model: &Graph<O>) -> TractResult<Vec<usize>>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     let inputs = model
@@ -455,14 +368,13 @@ where
         .collect::<Vec<usize>>();
     eval_order_for_nodes(&model.nodes, &inputs, &targets, &[])
 }
-pub fn eval_order_for_nodes<F, O>(
-    nodes: &[Node<F, O>],
+pub fn eval_order_for_nodes<O>(
+    nodes: &[Node<O>],
     model_inputs: &[usize],
     model_outputs: &[usize],
     more_dependencies: &[(usize, usize)],
 ) -> TractResult<Vec<usize>>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     let mut done = std::collections::HashSet::new();
@@ -521,23 +433,21 @@ where
 }
 use std::ops::{Deref, DerefMut};
 #[derive(Clone)]
-pub struct ModelPatch<F, O>
+pub struct ModelPatch<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    pub model: Graph<F, O>,
+    pub model: Graph<O>,
     pub inputs: HashMap<usize, usize>,
     pub incoming: HashMap<OutletId, OutletId>,
     pub shunt_outlet_by: HashMap<OutletId, OutletId>,
     pub obliterate: Vec<usize>,
 }
-impl<F, O> Default for ModelPatch<F, O>
+impl<O> Default for ModelPatch<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    fn default() -> ModelPatch<F, O> {
+    fn default() -> ModelPatch<O> {
         ModelPatch {
             model: Graph::default(),
             inputs: HashMap::default(),
@@ -547,32 +457,29 @@ where
         }
     }
 }
-impl<F, O> Deref for ModelPatch<F, O>
+impl<O> Deref for ModelPatch<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    type Target = Graph<F, O>;
-    fn deref(&self) -> &Graph<F, O> {
+    type Target = Graph<O>;
+    fn deref(&self) -> &Graph<O> {
         unimplemented!()
     }
 }
-impl<F, O> DerefMut for ModelPatch<F, O>
+impl<O> DerefMut for ModelPatch<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
-    fn deref_mut(&mut self) -> &mut Graph<F, O> {
+    fn deref_mut(&mut self) -> &mut Graph<O> {
         &mut self.model
     }
 }
-impl<F, O> ModelPatch<F, O>
+impl<O> ModelPatch<O>
 where
-    F: Clone + 'static,
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
-    Graph<F, O>: SpecialOps<F, O>,
+    Graph<O>: SpecialOps<O>,
 {
-    pub fn tap_model(&mut self, model: &Graph<F, O>, outlet: OutletId) -> TractResult<OutletId> {
+    pub fn tap_model(&mut self, model: &Graph<O>, outlet: OutletId) -> TractResult<OutletId> {
         let fact = model.outlet_fact(outlet)?;
         let id = self.add_source(
             format!("incoming-{}/{}", outlet.node, outlet.slot),
@@ -590,11 +497,11 @@ where
         Ok(())
     }
     pub fn replace_single_op<IO: Into<O>>(
-        patched_model: &Graph<F, O>,
-        node: &Node<F, O>,
+        patched_model: &Graph<O>,
+        node: &Node<O>,
         inputs: &[OutletId],
         new_op: IO,
-    ) -> TractResult<ModelPatch<F, O>> {
+    ) -> TractResult<ModelPatch<O>> {
         let mut patch = ModelPatch::default();
         let new_op = new_op.into();
         let inputs = inputs
@@ -608,7 +515,7 @@ where
         patch.obliterate(node.id)?;
         Ok(patch)
     }
-    pub fn apply(self, target: &mut Graph<F, O>) -> TractResult<()> {
+    pub fn apply(self, target: &mut Graph<O>) -> TractResult<()> {
         let prior_target_inputs = target.input_outlets()?.len();
         let prior_target_outputs = target.output_outlets()?.len();
         let ModelPatch {
@@ -621,7 +528,7 @@ where
         let mut all_inputs = HashMap::new();
         let model_input_outlets = target.input_outlets()?.to_vec();
         for node in patch.nodes {
-            if <Graph<F, O>>::is_source(&node.op)
+            if <Graph<O>>::is_source(&node.op)
                 && mapping.contains_key(&OutletId::new(node.id, 0))
             {
                 continue;
@@ -634,7 +541,7 @@ where
                 outputs,
             } = node;
             let n_outputs = outputs.len();
-            let facts = outputs.into_iter().map(|of| of.fact).collect();
+            let facts = outputs.into_iter().map(|of| TypedFact).collect();
             let added_node_id = target.add_node(name, op, facts)?;
             for ix in 0..n_outputs {
                 mapping.insert(
@@ -664,27 +571,25 @@ where
         Ok(())
     }
 }
-pub trait Translate<TI1, O1, TI2, O2>
+pub trait Translate<O1, O2>
 where
-    TI1: Clone + 'static,
-    TI2: Clone + 'static,
     O1: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
     O2: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     fn translate_node(
         &self,
-        source: &Graph<TI1, O1>,
-        node: &Node<TI1, O1>,
-        target: &mut Graph<TI2, O2>,
+        source: &Graph<O1>,
+        node: &Node<O1>,
+        target: &mut Graph<O2>,
         mapping: &HashMap<OutletId, OutletId>,
     ) -> TractResult<Vec<OutletId>>;
-    fn translate_model(&self, source: &Graph<TI1, O1>) -> TractResult<Graph<TI2, O2>> {
+    fn translate_model(&self, source: &Graph<O1>) -> TractResult<Graph<O2>> {
         Ok(self.translate_model_with_mappings(source)?.0)
     }
     fn translate_model_with_mappings(
         &self,
-        source: &Graph<TI1, O1>,
-    ) -> TractResult<(Graph<TI2, O2>, HashMap<OutletId, OutletId>)> {
+        source: &Graph<O1>,
+    ) -> TractResult<(Graph<O2>, HashMap<OutletId, OutletId>)> {
         let mut target = Graph::default();
         let mut mapping = HashMap::new();
         for old_id in source.eval_order()? {
@@ -704,20 +609,18 @@ where
     }
 }
 pub struct IntoTranslator;
-impl<TI1, O1, TI2, O2, EO, ETI> Translate<TI1, O1, TI2, O2> for IntoTranslator
+impl<O1, O2, EO> Translate<O1, O2> for IntoTranslator
 where
-    TractError: From<EO> + From<ETI>,
-    TI1: Clone + 'static,
-    TI2: for<'a> TryFrom<&'a TI1, Error = EO> + Clone + 'static,
+    TractError: From<EO>,
     O1: Clone + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
-    O2: for<'a> TryFrom<&'a O1, Error = ETI> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
-    Graph<TI2, O2>: SpecialOps<TI2, O2>,
+    O2: for<'a> TryFrom<&'a O1, Error = EO> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    Graph<O2>: SpecialOps<O2>,
 {
     fn translate_node(
         &self,
-        source: &Graph<TI1, O1>,
-        node: &Node<TI1, O1>,
-        target: &mut Graph<TI2, O2>,
+        source: &Graph<O1>,
+        node: &Node<O1>,
+        target: &mut Graph<O2>,
         mapping: &HashMap<OutletId, OutletId>,
     ) -> TractResult<Vec<OutletId>> {
         let node_is_input =
@@ -731,7 +634,7 @@ where
                         } else {
                             node.name.to_string()
                         },
-                        TI2::try_from(&node.outputs[i].fact)?,
+                        TypedFact
                     )
                 })
                 .collect()
@@ -740,7 +643,7 @@ where
             let facts = node
                 .outputs
                 .iter()
-                .map(|of| Ok(TI2::try_from(&of.fact)?))
+                .map(|of| Ok(TypedFact))
                 .collect::<TractResult<Vec<_>>>()?;
             let new_id = target.add_node(node.name.clone(), new_op, facts)?;
             for (ix, o) in node.inputs.iter().enumerate() {
@@ -761,10 +664,10 @@ where
         }
     }
 }
-pub type TypedModel = Graph<TypedFact, Box<dyn TypedOp>>;
-pub type TypedNode = Node<TypedFact, Box<dyn TypedOp>>;
-pub type TypedModelPatch = ModelPatch<TypedFact, Box<dyn TypedOp>>;
-impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
+pub type TypedModel = Graph<Box<dyn TypedOp>>;
+pub type TypedNode = Node<Box<dyn TypedOp>>;
+pub type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
+impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
     fn is_source(op: &Box<dyn TypedOp>) -> bool {
         op.as_any().downcast_ref::<TypedSource>().is_some()
     }
@@ -788,10 +691,10 @@ impl SpecialOps<TypedFact, Box<dyn TypedOp>> for TypedModel {
                     .iter()
                     .map(|o| self.outlet_fact(*o))
                     .collect::<TractResult<Vec<_>>>()?;
-                let facts = op.output_facts(&input_facts)?;
+                let facts = vec!(TypedFact);
                 Ok(facts)
             };
-            let output_facts = output_facts()?;
+            let output_facts = vec!(TypedFact);
             let id = self.add_node(&name, &op, output_facts)?;
             inputs
                 .iter()
@@ -812,9 +715,9 @@ pub use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
-    let wire = model.add_source("input", fact([1usize, 1])).unwrap();
+    let wire = model.add_source("input", TypedFact).unwrap();
     let a = model
-        .add_const("a", Tensor::zero(&[2, 1]).into_arc_tensor())
+        .add_const("a", Arc::new(Tensor))
         .unwrap();
     let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
