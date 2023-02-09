@@ -37,11 +37,7 @@ pub struct LirMatMulUnary {
 }
 impl TypedOp for LirMatMulUnary {}
 #[derive(Clone)]
-pub struct MatMul {}
-impl TypedOp for MatMul {}
-#[derive(Clone)]
 pub struct MatMulUnary {
-    pub a: Arc<()>,
 }
 impl TypedOp for MatMulUnary {}
 #[derive(Clone)]
@@ -64,11 +60,8 @@ pub enum AttrOrInput {
     Attr(Arc<()>),
     Input(usize),
 }
-#[derive(Clone)]
-pub struct TypedFact;
 pub trait SpecialOps<O> {
-    fn create_dummy(&self) -> O;
-    fn create_source(&self, fact: TypedFact) -> O;
+    fn create_source(&self) -> O;
     fn wire_node(&mut self, op: impl Into<O>, inputs: &[OutletId]) -> TractResult<Vec<OutletId>>;
 }
 #[derive(Clone)]
@@ -97,9 +90,9 @@ where
     O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
     Graph<O>: SpecialOps<O>,
 {
-    pub fn add_source(&mut self, fact: TypedFact) -> TractResult<OutletId> {
-        let source = self.create_source(fact.clone());
-        let id = self.add_node(source, vec![fact])?;
+    pub fn add_source(&mut self) -> TractResult<OutletId> {
+        let source = self.create_source();
+        let id = self.add_node(source)?;
         let id = OutletId::new(id, 0);
         self.inputs.push(id);
         Ok(id)
@@ -112,14 +105,10 @@ where
     pub fn add_node(
         &mut self,
         op: impl Into<O>,
-        output_facts: Vec<TypedFact>,
     ) -> TractResult<usize> {
         let op = op.into();
         let id = self.nodes.len();
-        let outputs = output_facts
-            .into_iter()
-            .map(|_fact| Outlet { successors: vec![] })
-            .collect();
+        let outputs = vec!( Outlet { successors: vec![] });
         let node = Node {
             id,
             op,
@@ -140,31 +129,13 @@ where
         }
         Ok(())
     }
-    pub fn input_outlets(&self) -> TractResult<&[OutletId]> {
-        Ok(&self.inputs)
-    }
-    pub fn set_input_outlets(&mut self, inputs: &[OutletId]) -> TractResult<()> {
-        self.inputs = inputs.to_vec();
-        Ok(())
-    }
-    pub fn output_outlets(&self) -> TractResult<&[OutletId]> {
-        Ok(&self.outputs)
-    }
-    pub fn set_output_outlets(&mut self, outputs: &[OutletId]) -> TractResult<()> {
-        self.outputs = outputs.to_vec();
-        Ok(())
-    }
-    pub fn outlet_fact(&self, outlet: OutletId) -> TractResult<&TypedFact> {
-        let outlets = &self.nodes[outlet.node].outputs;
-        Ok(outlets.get(outlet.slot).map(|o| &TypedFact).unwrap())
-    }
 }
 impl<O> Graph<O>
 where
     O: From<Const> + AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
-    pub fn add_const(&mut self, v: Arc<()>) -> TractResult<OutletId> {
-        self.add_node(Const, vec![TypedFact]).map(|id| id.into())
+    pub fn add_const(&mut self) -> TractResult<OutletId> {
+        self.add_node(Const).map(|id| id.into())
     }
 }
 #[derive(Clone)]
@@ -246,8 +217,7 @@ where
     Graph<O>: SpecialOps<O>,
 {
     pub fn tap_model(&mut self, model: &Graph<O>, outlet: OutletId) -> TractResult<OutletId> {
-        let fact = model.outlet_fact(outlet)?;
-        let id = self.add_source(TypedFact)?;
+        let id = self.add_source()?;
         self.incoming.insert(id, outlet);
         Ok(id)
     }
@@ -274,8 +244,6 @@ where
         Ok(patch)
     }
     pub fn apply(self, target: &mut Graph<O>) -> TractResult<()> {
-        let prior_target_inputs = target.input_outlets()?.len();
-        let prior_target_outputs = target.output_outlets()?.len();
         let ModelPatch {
             model: patch,
             incoming: mut mapping,
@@ -283,9 +251,9 @@ where
             ..
         } = self;
         let mut all_inputs = HashMap::new();
-        let model_input_outlets = target.input_outlets()?.to_vec();
+        let model_input_outlets = target.inputs.clone();
         for node in patch.nodes {
-            if model_input_outlets.contains(&OutletId::new(node.id, 0))
+            if target.inputs.contains(&OutletId::new(node.id, 0))
                 && mapping.contains_key(&OutletId::new(node.id, 0))
             {
                 continue;
@@ -297,8 +265,7 @@ where
                 outputs,
             } = node;
             let n_outputs = outputs.len();
-            let facts = outputs.into_iter().map(|of| TypedFact).collect();
-            let added_node_id = target.add_node(op, facts)?;
+            let added_node_id = target.add_node(op)?;
             for ix in 0..n_outputs {
                 mapping.insert(
                     OutletId::new(patch_node_id, ix),
@@ -320,17 +287,14 @@ where
                 target.add_edge(mapping[&input], InletId { node, slot: ix })?;
             }
         }
-        target.set_input_outlets(&model_input_outlets)?;
+        target.inputs = model_input_outlets;
         Ok(())
     }
 }
 pub type TypedModel = Graph<Box<dyn TypedOp>>;
 pub type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
 impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
-    fn create_dummy(&self) -> Box<dyn TypedOp> {
-        unimplemented!()
-    }
-    fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
+    fn create_source(&self) -> Box<dyn TypedOp> {
         Box::new(TypedSource {})
     }
     fn wire_node(
@@ -340,8 +304,7 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
     ) -> TractResult<Vec<OutletId>> {
         let op = op.into();
         {
-            let output_facts = vec![TypedFact];
-            let id = self.add_node(&op, output_facts)?;
+            let id = self.add_node(&op)?;
             inputs
                 .iter()
                 .enumerate()
@@ -361,15 +324,14 @@ pub use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
-    let source = model.add_source(TypedFact).unwrap();
-    let a = model.add_const(Arc::new(())).unwrap();
-    let mm = model.wire_node(MatMul {}, &[a, source]).unwrap()[0];
-    model.set_output_outlets(&[mm]).unwrap();
+    let source = model.add_source().unwrap();
+    let mm = model.wire_node(MatMulUnary {}, &[source]).unwrap()[0];
+    model.outputs = vec!(mm);
     let patch = TypedModelPatch::replace_single_op(
         &model,
         &model.nodes[mm.node],
         &[source],
-        MatMulUnary { a: Arc::new(()) },
+        MatMulUnary {  },
     )
     .unwrap();
     patch.apply(&mut model).unwrap();
