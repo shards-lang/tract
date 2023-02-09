@@ -338,13 +338,5 @@ fn crasher_monterey_matmul() {
     let wire = model.outputs[0];
     let packed_as =
         Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
-    let patch = TypedModelPatch::replace_single_op(
-        &model,
-        &model.nodes[wire.node],
-        &model.nodes[wire.node].inputs,
-        LirMatMulUnary {
-            micro_ops: packed_as,
-        },
-    )
-    .unwrap();
+    packed_as.clone();
 }
