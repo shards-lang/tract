@@ -1,4 +1,3 @@
-pub type TractError = anyhow::Error;
 pub type TractResult<T> = anyhow::Result<T>;
 use ndarray::*;
 pub struct Tensor;
@@ -141,12 +140,7 @@ pub struct TypedFact;
 pub trait SpecialOps<O> {
     fn create_dummy(&self) -> O;
     fn create_source(&self, fact: TypedFact) -> O;
-    fn is_source(op: &O) -> bool;
-    fn wire_node(
-        &mut self,
-        op: impl Into<O>,
-        inputs: &[OutletId],
-    ) -> TractResult<Vec<OutletId>>;
+    fn wire_node(&mut self, op: impl Into<O>, inputs: &[OutletId]) -> TractResult<Vec<OutletId>>;
 }
 #[derive(Clone)]
 pub struct Graph<O>
@@ -174,10 +168,7 @@ where
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
     Graph<O>: SpecialOps<O>,
 {
-    pub fn add_source(
-        &mut self,
-        fact: TypedFact,
-    ) -> TractResult<OutletId> {
+    pub fn add_source(&mut self, fact: TypedFact) -> TractResult<OutletId> {
         let source = self.create_source(fact.clone());
         let id = self.add_node(source, vec![fact])?;
         let id = OutletId::new(id, 0);
@@ -244,8 +235,7 @@ where
     O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     pub fn add_const(&mut self, v: Arc<Tensor>) -> TractResult<OutletId> {
-        self.add_node(Const, vec![TypedFact])
-            .map(|id| id.into())
+        self.add_node(Const, vec![TypedFact]).map(|id| id.into())
     }
 }
 #[derive(Clone)]
@@ -374,7 +364,7 @@ where
         let mut all_inputs = HashMap::new();
         let model_input_outlets = target.input_outlets()?.to_vec();
         for node in patch.nodes {
-            if <Graph<O>>::is_source(&node.op) && mapping.contains_key(&OutletId::new(node.id, 0)) {
+            if model_input_outlets.contains(&OutletId::new(node.id, 0)) && mapping.contains_key(&OutletId::new(node.id, 0)) {
                 continue;
             }
             let Node {
@@ -418,9 +408,6 @@ pub type TypedModel = Graph<Box<dyn TypedOp>>;
 pub type TypedNode = Node<Box<dyn TypedOp>>;
 pub type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
 impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
-    fn is_source(op: &Box<dyn TypedOp>) -> bool {
-        op.as_any().downcast_ref::<TypedSource>().is_some()
-    }
     fn create_dummy(&self) -> Box<dyn TypedOp> {
         Box::new(Const)
     }
@@ -460,13 +447,14 @@ fn crasher_monterey_matmul() {
     let mm = model.wire_node(MatMul {}, &[a, source]).unwrap()[0];
     model.set_output_outlets(&[mm]).unwrap();
     let patch = TypedModelPatch::replace_single_op(
-            &model,
-            &model.nodes[mm.node],
-            &[source],
-            MatMulUnary {
-                a: Arc::new(Tensor),
-            },
-        ).unwrap();
+        &model,
+        &model.nodes[mm.node],
+        &[source],
+        MatMulUnary {
+            a: Arc::new(Tensor),
+        },
+    )
+    .unwrap();
     patch.apply(&mut model).unwrap();
     let wire = model.outputs[0];
     let patch = model.nodes[wire.node]
