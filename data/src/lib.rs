@@ -47,16 +47,12 @@ trait SpecialOps<O> {
 }
 #[derive(Clone)]
 struct Graph<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
 {
     pub nodes: Vec<Node<O>>,
     pub inputs: Vec<OutletId>,
     pub outputs: Vec<OutletId>,
 }
 impl<O> Default for Graph<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
 {
     fn default() -> Graph<O> {
         Graph {
@@ -68,7 +64,6 @@ where
 }
 impl<O> Graph<O>
 where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
     Graph<O>: SpecialOps<O>,
 {
     pub fn add_source(&mut self) -> TractResult<OutletId> {
@@ -80,8 +75,6 @@ where
     }
 }
 impl<O> Graph<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
 {
     pub fn add_node(&mut self, op: impl Into<O>) -> TractResult<usize> {
         let op = op.into();
@@ -138,8 +131,6 @@ struct InletId {
 use std::ops::{Deref, DerefMut};
 #[derive(Clone)]
 struct ModelPatch<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> +  'static,
 {
     pub model: Graph<O>,
     pub inputs: HashMap<usize, usize>,
@@ -147,8 +138,6 @@ where
     pub shunt_outlet_by: HashMap<OutletId, OutletId>,
 }
 impl<O> Default for ModelPatch<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
 {
     fn default() -> ModelPatch<O> {
         ModelPatch {
@@ -159,30 +148,12 @@ where
         }
     }
 }
-impl<O> Deref for ModelPatch<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
-{
-    type Target = Graph<O>;
-    fn deref(&self) -> &Graph<O> {
-        unimplemented!()
-    }
-}
-impl<O> DerefMut for ModelPatch<O>
-where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
-{
-    fn deref_mut(&mut self) -> &mut Graph<O> {
-        &mut self.model
-    }
-}
 impl<O> ModelPatch<O>
 where
-    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + 'static,
     Graph<O>: SpecialOps<O>,
 {
     pub fn tap_model(&mut self, model: &Graph<O>, outlet: OutletId) -> TractResult<OutletId> {
-        let id = self.add_source()?;
+        let id = self.model.add_source()?;
         self.incoming.insert(id, outlet);
         Ok(id)
     }
@@ -202,7 +173,7 @@ where
             .iter()
             .map(|i| patch.tap_model(patched_model, *i))
             .collect::<TractResult<Vec<_>>>()?;
-        let wires = patch.wire_node(new_op, &inputs)?;
+        let wires = patch.model.wire_node(new_op, &inputs)?;
         for (ix, o) in wires.iter().enumerate() {
             patch.shunt_outside(OutletId::new(node.id, ix), *o)?;
         }
@@ -299,7 +270,7 @@ fn crasher_monterey_matmul() {
     )
     .unwrap();
     patch.apply(&mut model).unwrap();
-    let wire = model.outputs[0];
+
     let packed_as =
         Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
     packed_as.clone();
