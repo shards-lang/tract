@@ -18,18 +18,12 @@ pub struct Dummy;
 impl Op for Dummy {}
 impl TypedOp for Dummy {
     as_op!();
-    fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        unimplemented!()
-    }
 }
 #[derive(Clone)]
 pub struct Const(pub Arc<Tensor>);
 impl Op for Const {}
 impl TypedOp for Const {
     as_op!();
-    fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        unimplemented!()
-    }
 }
 #[derive(Copy, Clone)]
 pub enum BinOp {
@@ -64,18 +58,12 @@ pub struct LirMatMulUnary {
 }
 impl Op for LirMatMulUnary {}
 impl TypedOp for LirMatMulUnary {
-    fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![TypedFact])
-    }
     as_op!();
 }
 #[derive(Clone)]
 pub struct MatMul {}
 impl Op for MatMul {}
 impl TypedOp for MatMul {
-    fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![TypedFact])
-    }
     fn declutter(
         &self,
         model: &TypedModel,
@@ -85,7 +73,9 @@ impl TypedOp for MatMul {
             model,
             node,
             &node.inputs[1..2],
-            MatMulUnary { a: Arc::new(Tensor) },
+            MatMulUnary {
+                a: Arc::new(Tensor),
+            },
         )
         .map(Some)
     }
@@ -97,9 +87,6 @@ pub struct MatMulUnary {
 }
 impl Op for MatMulUnary {}
 impl TypedOp for MatMulUnary {
-    fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![TypedFact])
-    }
     fn codegen(
         &self,
         model: &TypedModel,
@@ -112,27 +99,21 @@ impl TypedOp for MatMulUnary {
             model,
             node,
             &node.inputs,
-            LirMatMulUnary { micro_ops: packed_as },
-        ).map(Some)
+            LirMatMulUnary {
+                micro_ops: packed_as,
+            },
+        )
+        .map(Some)
     }
     as_op!();
 }
 #[derive(Clone, PartialEq, Eq)]
 pub struct MatMatMulPack {}
 impl Op for MatMatMulPack {}
-impl TypedOp for MatMatMulPack {
-    fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        Ok(vec![TypedFact])
-    }
-    as_op!();
-}
 #[derive(Clone)]
 pub struct TypedSource {}
 impl Op for TypedSource {}
 impl TypedOp for TypedSource {
-    fn output_facts(&self, _inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>> {
-        unimplemented!()
-    }
     as_op!();
 }
 use std::any::Any;
@@ -140,7 +121,6 @@ pub trait Op: dyn_clone::DynClone + Send + Sync + 'static {}
 pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static {
     fn as_op(&self) -> &dyn Op;
     fn as_any(&self) -> &dyn Any;
-    fn output_facts(&self, inputs: &[&TypedFact]) -> TractResult<Vec<TypedFact>>;
     #[allow(unused_variables)]
     fn declutter(
         &self,
@@ -223,7 +203,11 @@ where
     O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
     Graph<O>: SpecialOps<O>,
 {
-    pub fn add_source(&mut self, name: impl Into<String>, fact: TypedFact) -> TractResult<OutletId> {
+    pub fn add_source(
+        &mut self,
+        name: impl Into<String>,
+        fact: TypedFact,
+    ) -> TractResult<OutletId> {
         let source = self.create_source(fact.clone());
         let id = self.add_node(name, source, vec![fact])?;
         let id = OutletId::new(id, 0);
@@ -246,9 +230,7 @@ where
         let id = self.nodes.len();
         let outputs = output_facts
             .into_iter()
-            .map(|_fact| Outlet {
-                successors: vec![],
-            })
+            .map(|_fact| Outlet { successors: vec![] })
             .collect();
         let node = Node {
             id,
@@ -301,17 +283,6 @@ where
         let name = name.into();
         self.add_node(name, Const(v), vec![TypedFact])
             .map(|id| id.into())
-    }
-}
-impl<O> Graph<O>
-where
-    O: Clone + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static + for<'a> std::convert::From<&'a O>,
-    Graph<O>: SpecialOps<O>,
-{
-    pub fn compact(&mut self) -> TractResult<()> {
-        let mut result = IntoTranslator.translate_model(self)?;
-        std::mem::swap(self, &mut result);
-        Ok(())
     }
 }
 #[derive(Clone)]
@@ -528,9 +499,7 @@ where
         let mut all_inputs = HashMap::new();
         let model_input_outlets = target.input_outlets()?.to_vec();
         for node in patch.nodes {
-            if <Graph<O>>::is_source(&node.op)
-                && mapping.contains_key(&OutletId::new(node.id, 0))
-            {
+            if <Graph<O>>::is_source(&node.op) && mapping.contains_key(&OutletId::new(node.id, 0)) {
                 continue;
             }
             let Node {
@@ -634,7 +603,7 @@ where
                         } else {
                             node.name.to_string()
                         },
-                        TypedFact
+                        TypedFact,
                     )
                 })
                 .collect()
@@ -686,15 +655,8 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
         let op = op.into();
         let name = name.into();
         {
-            let output_facts = || -> TractResult<Vec<TypedFact>> {
-                let input_facts = inputs
-                    .iter()
-                    .map(|o| self.outlet_fact(*o))
-                    .collect::<TractResult<Vec<_>>>()?;
-                let facts = vec!(TypedFact);
-                Ok(facts)
-            };
-            let output_facts = vec!(TypedFact);
+            let output_facts = || -> TractResult<Vec<TypedFact>> { unimplemented!() };
+            let output_facts = vec![TypedFact];
             let id = self.add_node(&name, &op, output_facts)?;
             inputs
                 .iter()
@@ -716,22 +678,17 @@ pub use std::collections::HashMap;
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
     let wire = model.add_source("input", TypedFact).unwrap();
-    let a = model
-        .add_const("a", Arc::new(Tensor))
-        .unwrap();
+    let a = model.add_const("a", Arc::new(Tensor)).unwrap();
     let wire = model.wire_node("conv", MatMul {}, &[a, wire]).unwrap()[0];
     model.set_output_outlets(&[wire]).unwrap();
-    let patch = model
-        .nodes[wire.node]
+    let patch = model.nodes[wire.node]
         .op
         .declutter(&model, &model.nodes[wire.node])
         .unwrap()
         .unwrap();
     patch.apply(&mut model).unwrap();
-    model.compact().unwrap();
     let wire = model.outputs[0];
-    let patch = model
-        .nodes[wire.node]
+    let patch = model.nodes[wire.node]
         .op
         .codegen(&model, &model.nodes[wire.node])
         .unwrap()
