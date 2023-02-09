@@ -234,7 +234,7 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
 }
 use std::collections::HashMap;
 #[test]
-fn crasher_monterey_matmul() {
+fn crasher_monterey() {
     let mut model = TypedModel::default();
     let source = model.add_source().unwrap();
     let mm = model.wire_node(Box::new(MatMulUnary {}), &[source]).unwrap()[0];
@@ -250,5 +250,10 @@ fn crasher_monterey_matmul() {
 
     let packed_as =
         Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
+    let item:&[ProtoFusedSpec] = &packed_as.as_slice().unwrap()[0].1;
+    dbg!(std::mem::size_of::<ProtoFusedSpec>());
+unsafe {
+    eprintln!("{:?}", std::slice::from_raw_parts(item.as_ptr() as *const u8, 64));
+}
     packed_as.clone();
 }

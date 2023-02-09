@@ -4,8 +4,6 @@ members = [
 ]
 
 [workspace.dependencies]
-anyhow = "1.0.43"
-downcast-rs = "1.2.0"
 dyn-clone = "1.0.4"
 ndarray = { version = "0.15.6", default-features=false }
 
