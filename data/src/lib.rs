@@ -3,8 +3,7 @@ use ndarray::*;
 use std::sync::Arc;
 #[derive(Clone)]
 pub struct Const;
-impl TypedOp for Const {
-}
+impl TypedOp for Const {}
 #[derive(Copy, Clone)]
 pub enum BinOp {
     Min,
@@ -36,24 +35,19 @@ pub enum ProtoFusedSpec {
 pub struct LirMatMulUnary {
     pub micro_ops: ArrayD<(Arc<()>, Vec<ProtoFusedSpec>)>,
 }
-impl TypedOp for LirMatMulUnary {
-}
+impl TypedOp for LirMatMulUnary {}
 #[derive(Clone)]
 pub struct MatMul {}
-impl TypedOp for MatMul {
-}
+impl TypedOp for MatMul {}
 #[derive(Clone)]
 pub struct MatMulUnary {
     pub a: Arc<()>,
 }
-impl TypedOp for MatMulUnary {
-}
+impl TypedOp for MatMulUnary {}
 #[derive(Clone)]
 pub struct TypedSource {}
-impl TypedOp for TypedSource {
-}
-pub trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {
-}
+impl TypedOp for TypedSource {}
+pub trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {}
 dyn_clone::clone_trait_object!(TypedOp);
 impl<O: TypedOp> From<O> for Box<dyn TypedOp> {
     fn from(it: O) -> Box<dyn TypedOp> {
@@ -291,7 +285,9 @@ where
         let mut all_inputs = HashMap::new();
         let model_input_outlets = target.input_outlets()?.to_vec();
         for node in patch.nodes {
-            if model_input_outlets.contains(&OutletId::new(node.id, 0)) && mapping.contains_key(&OutletId::new(node.id, 0)) {
+            if model_input_outlets.contains(&OutletId::new(node.id, 0))
+                && mapping.contains_key(&OutletId::new(node.id, 0))
+            {
                 continue;
             }
             let Node {
@@ -329,11 +325,10 @@ where
     }
 }
 pub type TypedModel = Graph<Box<dyn TypedOp>>;
-pub type TypedNode = Node<Box<dyn TypedOp>>;
 pub type TypedModelPatch = ModelPatch<Box<dyn TypedOp>>;
 impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
     fn create_dummy(&self) -> Box<dyn TypedOp> {
-        Box::new(Const)
+        unimplemented!()
     }
     fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
         Box::new(TypedSource {})
@@ -374,22 +369,20 @@ fn crasher_monterey_matmul() {
         &model,
         &model.nodes[mm.node],
         &[source],
-        MatMulUnary {
-            a: Arc::new(()),
-        },
+        MatMulUnary { a: Arc::new(()) },
     )
     .unwrap();
     patch.apply(&mut model).unwrap();
     let wire = model.outputs[0];
-        let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            (Arc::new(()), vec![ProtoFusedSpec::Store])
-        });
-       let patch =  TypedModelPatch::replace_single_op(
-            &model,
-            &model.nodes[wire.node],
-            &model.nodes[wire.node].inputs,
-            LirMatMulUnary {
-                micro_ops: packed_as,
-            },
-        ).unwrap();
+    let packed_as =
+        Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
+    let patch = TypedModelPatch::replace_single_op(
+        &model,
+        &model.nodes[wire.node],
+        &model.nodes[wire.node].inputs,
+        LirMatMulUnary {
+            micro_ops: packed_as,
+        },
+    )
+    .unwrap();
 }
