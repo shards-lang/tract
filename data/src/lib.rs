@@ -5,22 +5,13 @@ pub struct Tensor;
 use std::sync::Arc;
 macro_rules! as_op {
     () => {
-        fn as_op(&self) -> &dyn Op {
-            self
-        }
         fn as_any(&self) -> &dyn Any {
             self
         }
     };
 }
-#[derive(Clone, Default)]
-pub struct Dummy;
-impl Op for Dummy {}
-impl TypedOp for Dummy {
-    as_op!();
-}
 #[derive(Clone)]
-pub struct Const(pub Arc<Tensor>);
+pub struct Const;
 impl Op for Const {}
 impl TypedOp for Const {
     as_op!();
@@ -64,21 +55,6 @@ impl TypedOp for LirMatMulUnary {
 pub struct MatMul {}
 impl Op for MatMul {}
 impl TypedOp for MatMul {
-    fn declutter(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        TypedModelPatch::replace_single_op(
-            model,
-            node,
-            &node.inputs[1..2],
-            MatMulUnary {
-                a: Arc::new(Tensor),
-            },
-        )
-        .map(Some)
-    }
     as_op!();
 }
 #[derive(Clone)]
@@ -116,7 +92,6 @@ impl TypedOp for TypedSource {
 use std::any::Any;
 pub trait Op: dyn_clone::DynClone + Send + Sync + 'static {}
 pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static {
-    fn as_op(&self) -> &dyn Op;
     fn as_any(&self) -> &dyn Any;
     #[allow(unused_variables)]
     fn declutter(
@@ -269,7 +244,7 @@ where
     O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
 {
     pub fn add_const(&mut self, v: Arc<Tensor>) -> TractResult<OutletId> {
-        self.add_node(Const(v), vec![TypedFact])
+        self.add_node(Const, vec![TypedFact])
             .map(|id| id.into())
     }
 }
@@ -447,7 +422,7 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
         op.as_any().downcast_ref::<TypedSource>().is_some()
     }
     fn create_dummy(&self) -> Box<dyn TypedOp> {
-        Box::new(Dummy::default())
+        Box::new(Const)
     }
     fn create_source(&self, _fact: TypedFact) -> Box<dyn TypedOp> {
         Box::new(TypedSource {})
@@ -480,15 +455,18 @@ pub use std::collections::HashMap;
 #[test]
 fn crasher_monterey_matmul() {
     let mut model = TypedModel::default();
-    let wire = model.add_source(TypedFact).unwrap();
+    let source = model.add_source(TypedFact).unwrap();
     let a = model.add_const(Arc::new(Tensor)).unwrap();
-    let wire = model.wire_node(MatMul {}, &[a, wire]).unwrap()[0];
-    model.set_output_outlets(&[wire]).unwrap();
-    let patch = model.nodes[wire.node]
-        .op
-        .declutter(&model, &model.nodes[wire.node])
-        .unwrap()
-        .unwrap();
+    let mm = model.wire_node(MatMul {}, &[a, source]).unwrap()[0];
+    model.set_output_outlets(&[mm]).unwrap();
+    let patch = TypedModelPatch::replace_single_op(
+            &model,
+            &model.nodes[mm.node],
+            &[source],
+            MatMulUnary {
+                a: Arc::new(Tensor),
+            },
+        ).unwrap();
     patch.apply(&mut model).unwrap();
     let wire = model.outputs[0];
     let patch = model.nodes[wire.node]
