@@ -16,5 +16,4 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 dyn-clone.workspace = true
-anyhow.workspace = true
 ndarray.workspace = true

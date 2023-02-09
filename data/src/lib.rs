@@ -1,4 +1,4 @@
-pub type TractResult<T> = anyhow::Result<T>;
+pub type TractResult<T> = Result<T,()>;
 use ndarray::*;
 use std::sync::Arc;
 #[derive(Clone)]
