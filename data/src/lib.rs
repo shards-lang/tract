@@ -3,7 +3,6 @@ use ndarray::*;
 use std::sync::Arc;
 #[derive(Clone)]
 pub struct Const;
-impl Op for Const {}
 impl TypedOp for Const {
 }
 #[derive(Copy, Clone)]
@@ -37,19 +36,16 @@ pub enum ProtoFusedSpec {
 pub struct LirMatMulUnary {
     pub micro_ops: ArrayD<(Arc<()>, Vec<ProtoFusedSpec>)>,
 }
-impl Op for LirMatMulUnary {}
 impl TypedOp for LirMatMulUnary {
 }
 #[derive(Clone)]
 pub struct MatMul {}
-impl Op for MatMul {}
 impl TypedOp for MatMul {
 }
 #[derive(Clone)]
 pub struct MatMulUnary {
     pub a: Arc<()>,
 }
-impl Op for MatMulUnary {}
 impl TypedOp for MatMulUnary {
     fn codegen(
         &self,
@@ -72,11 +68,9 @@ impl TypedOp for MatMulUnary {
 }
 #[derive(Clone)]
 pub struct TypedSource {}
-impl Op for TypedSource {}
 impl TypedOp for TypedSource {
 }
-pub trait Op: dyn_clone::DynClone + Send + Sync + 'static {}
-pub trait TypedOp: Op + dyn_clone::DynClone + Send + Sync + 'static {
+pub trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {
     #[allow(unused_variables)]
     fn codegen(
         &self,
@@ -97,16 +91,6 @@ impl<'a> From<&'a Box<dyn TypedOp>> for Box<dyn TypedOp> {
         it.clone()
     }
 }
-impl AsRef<dyn Op> for Box<dyn TypedOp> {
-    fn as_ref(&self) -> &dyn Op {
-        unimplemented!()
-    }
-}
-impl AsMut<dyn Op> for Box<dyn TypedOp> {
-    fn as_mut(&mut self) -> &mut dyn Op {
-        unimplemented!()
-    }
-}
 #[derive(Clone)]
 pub enum AttrOrInput {
     Attr(Arc<()>),
@@ -122,7 +106,7 @@ pub trait SpecialOps<O> {
 #[derive(Clone)]
 pub struct Graph<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     pub nodes: Vec<Node<O>>,
     pub inputs: Vec<OutletId>,
@@ -130,7 +114,7 @@ where
 }
 impl<O> Default for Graph<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     fn default() -> Graph<O> {
         Graph {
@@ -142,7 +126,7 @@ where
 }
 impl<O> Graph<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
     Graph<O>: SpecialOps<O>,
 {
     pub fn add_source(&mut self, fact: TypedFact) -> TractResult<OutletId> {
@@ -155,7 +139,7 @@ where
 }
 impl<O> Graph<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     pub fn add_node(
         &mut self,
@@ -209,7 +193,7 @@ where
 }
 impl<O> Graph<O>
 where
-    O: From<Const> + AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: From<Const> + AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     pub fn add_const(&mut self, v: Arc<()>) -> TractResult<OutletId> {
         self.add_node(Const, vec![TypedFact]).map(|id| id.into())
@@ -251,7 +235,7 @@ use std::ops::{Deref, DerefMut};
 #[derive(Clone)]
 pub struct ModelPatch<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     pub model: Graph<O>,
     pub inputs: HashMap<usize, usize>,
@@ -260,7 +244,7 @@ where
 }
 impl<O> Default for ModelPatch<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     fn default() -> ModelPatch<O> {
         ModelPatch {
@@ -273,7 +257,7 @@ where
 }
 impl<O> Deref for ModelPatch<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     type Target = Graph<O>;
     fn deref(&self) -> &Graph<O> {
@@ -282,7 +266,7 @@ where
 }
 impl<O> DerefMut for ModelPatch<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
 {
     fn deref_mut(&mut self) -> &mut Graph<O> {
         &mut self.model
@@ -290,7 +274,7 @@ where
 }
 impl<O> ModelPatch<O>
 where
-    O: AsRef<dyn Op> + AsMut<dyn Op> + Clone + 'static,
+    O: AsRef<dyn TypedOp> + AsMut<dyn TypedOp> + Clone + 'static,
     Graph<O>: SpecialOps<O>,
 {
     pub fn tap_model(&mut self, model: &Graph<O>, outlet: OutletId) -> TractResult<OutletId> {
