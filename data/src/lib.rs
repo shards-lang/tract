@@ -47,38 +47,12 @@ pub struct MatMulUnary {
     pub a: Arc<()>,
 }
 impl TypedOp for MatMulUnary {
-    fn codegen(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
-            (Arc::new(()), vec![ProtoFusedSpec::Store])
-        });
-        TypedModelPatch::replace_single_op(
-            model,
-            node,
-            &node.inputs,
-            LirMatMulUnary {
-                micro_ops: packed_as,
-            },
-        )
-        .map(Some)
-    }
 }
 #[derive(Clone)]
 pub struct TypedSource {}
 impl TypedOp for TypedSource {
 }
 pub trait TypedOp: dyn_clone::DynClone + Send + Sync + 'static {
-    #[allow(unused_variables)]
-    fn codegen(
-        &self,
-        model: &TypedModel,
-        node: &TypedNode,
-    ) -> TractResult<Option<TypedModelPatch>> {
-        unimplemented!()
-    }
 }
 dyn_clone::clone_trait_object!(TypedOp);
 impl<O: TypedOp> From<O> for Box<dyn TypedOp> {
@@ -407,9 +381,15 @@ fn crasher_monterey_matmul() {
     .unwrap();
     patch.apply(&mut model).unwrap();
     let wire = model.outputs[0];
-    let patch = model.nodes[wire.node]
-        .op
-        .codegen(&model, &model.nodes[wire.node])
-        .unwrap()
-        .unwrap();
+        let packed_as = Array::from_shape_fn(vec![1, 1], |_| {
+            (Arc::new(()), vec![ProtoFusedSpec::Store])
+        });
+       let patch =  TypedModelPatch::replace_single_op(
+            &model,
+            &model.nodes[wire.node],
+            &model.nodes[wire.node].inputs,
+            LirMatMulUnary {
+                micro_ops: packed_as,
+            },
+        ).unwrap();
 }
