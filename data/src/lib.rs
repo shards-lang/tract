@@ -265,10 +265,26 @@ fn crasher_monterey() {
     .unwrap();
     patch.apply(&mut model).unwrap();
 
+    eprintln!("store:");
     dump_pfs(&ProtoFusedSpec::Store);
+    eprintln!("bins:");
+    dump_pfs(&ProtoFusedSpec::BinScalar(AttrOrInput::Input(4), BinOp::Min));
+    dump_pfs(&ProtoFusedSpec::BinScalar(AttrOrInput::Input(4), BinOp::Max));
+    dump_pfs(&ProtoFusedSpec::BinPerRow(AttrOrInput::Input(4), BinOp::Min));
+    dump_pfs(&ProtoFusedSpec::BinPerCol(AttrOrInput::Input(4), BinOp::Min));
+    eprintln!("add unicast (with input):");
+    dump_pfs(&ProtoFusedSpec::AddUnicast(OutputStoreSpec::Strides { col_byte_stride: 3, mr: 3, nr: 3, m: 3, n: 3}, AttrOrInput::Input(2)));
+    eprintln!("add unicast (with attr):");
+    dump_pfs(&ProtoFusedSpec::AddUnicast(OutputStoreSpec::Strides { col_byte_stride: 3, mr: 3, nr: 3, m: 3, n: 3}, AttrOrInput::Attr(Arc::new(()))));
+    eprintln!("add row col product:");
+    dump_pfs(&ProtoFusedSpec::AddRowColProducts(AttrOrInput::Input(3), AttrOrInput::Input(4)));
+
     let packed_as =
         Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
+    eprintln!("in ndarray:");
     dump_pfs(&packed_as.as_slice().unwrap()[0].1[0]);
     let cloned = packed_as.clone();
+    std::mem::drop(packed_as);
+    eprintln!("cloned:");
     dump_pfs(&cloned.as_slice().unwrap()[0].1[0]);
 }
