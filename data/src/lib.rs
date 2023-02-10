@@ -233,6 +233,20 @@ impl SpecialOps<Box<dyn TypedOp>> for TypedModel {
     }
 }
 use std::collections::HashMap;
+
+fn dump_pfs(pfs: &ProtoFusedSpec) {
+    let ptr = pfs as *const ProtoFusedSpec as *const u8;
+    for i in 0..std::mem::size_of::<ProtoFusedSpec>() {
+        let v = unsafe { *ptr.add(i) };
+        if v == 0 {
+        	print!("__ ");
+        } else {
+        	print!("{:02x} ", v);
+        }
+    }
+    println!("");
+}
+
 #[test]
 fn crasher_monterey() {
     let mut model = TypedModel::default();
@@ -248,12 +262,10 @@ fn crasher_monterey() {
     .unwrap();
     patch.apply(&mut model).unwrap();
 
+    dump_pfs(&ProtoFusedSpec::Store);
     let packed_as =
         Array::from_shape_fn(vec![1, 1], |_| (Arc::new(()), vec![ProtoFusedSpec::Store]));
-    let item:&[ProtoFusedSpec] = &packed_as.as_slice().unwrap()[0].1;
-    dbg!(std::mem::size_of::<ProtoFusedSpec>());
-unsafe {
-    eprintln!("{:?}", std::slice::from_raw_parts(item.as_ptr() as *const u8, 64));
-}
-    packed_as.clone();
+    dump_pfs(&packed_as.as_slice().unwrap()[0].1[0]);
+    let cloned = packed_as.clone();
+    dump_pfs(&cloned.as_slice().unwrap()[0].1[0]);
 }
