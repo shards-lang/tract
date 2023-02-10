@@ -243,6 +243,9 @@ fn dump_pfs(pfs: &ProtoFusedSpec) {
         } else {
         	print!("{:02x} ", v);
         }
+        if i % 8 == 7 {
+              print!("| ");
+        }
     }
     println!("");
 }
