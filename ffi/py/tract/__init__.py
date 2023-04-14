@@ -50,6 +50,7 @@ from .inference_model import InferenceModel
 from .runnable import Runnable
 from .nnef import Nnef
 from .onnx import Onnx
+from .state import State, FrozenState
 
 def version() -> str:
     """Return the version string of `tract` native library"""

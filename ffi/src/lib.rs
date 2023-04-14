@@ -1,14 +1,14 @@
 #![allow(clippy::missing_safety_doc)]
 
 use anyhow::Context;
-use tract_libcli::annotations::Annotations;
-use tract_libcli::profile::BenchLimits;
-use tract_nnef::prelude::translator::Translate;
 use std::cell::RefCell;
 use std::convert::TryFrom;
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::sync::Arc;
 use tract_data::internal::parse_tdim;
+use tract_libcli::annotations::Annotations;
+use tract_libcli::profile::BenchLimits;
+use tract_nnef::prelude::translator::Translate;
 use tract_pulse::model::{PulsedModel, PulsedModelExt};
 
 use tract_nnef::internal as native;
@@ -252,7 +252,10 @@ pub unsafe extern "C" fn tract_nnef_enable_pulse(nnef: *mut TractNnef) -> TRACT_
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn tract_nnef_allow_extended_identifier_syntax(nnef: *mut TractNnef, enable: bool) -> TRACT_RESULT {
+pub unsafe extern "C" fn tract_nnef_allow_extended_identifier_syntax(
+    nnef: *mut TractNnef,
+    enable: bool,
+) -> TRACT_RESULT {
     wrap(|| unsafe {
         check_not_null!(nnef);
         (*nnef).0.allow_extended_identifier_syntax(enable);
@@ -746,9 +749,7 @@ pub unsafe extern "C" fn tract_model_pulse_simple(
 
 /// Convert the model from single precision to half precision.
 #[no_mangle]
-pub unsafe extern "C" fn tract_model_half(
-    model: *mut *mut TractModel,
-) -> TRACT_RESULT {
+pub unsafe extern "C" fn tract_model_half(model: *mut *mut TractModel) -> TRACT_RESULT {
     wrap(|| unsafe {
         check_not_null!(model, *model);
         let model = &mut (**model).0;
@@ -789,9 +790,18 @@ pub unsafe extern "C" fn tract_model_profile_json(
         tract_libcli::profile::extract_costs(&mut annotations, model)?;
         if !inputs.is_null() {
             let input_len = model.inputs.len();
-            let values:TVec<TValue> =
-                std::slice::from_raw_parts(inputs, input_len).iter().map(|tv| (**tv).0.clone()).collect();
-            tract_libcli::profile::profile(model, &BenchLimits::default(), &mut annotations, &values, None, true)?;
+            let values: TVec<TValue> = std::slice::from_raw_parts(inputs, input_len)
+                .iter()
+                .map(|tv| (**tv).0.clone())
+                .collect();
+            tract_libcli::profile::profile(
+                model,
+                &BenchLimits::default(),
+                &mut annotations,
+                &values,
+                None,
+                true,
+            )?;
         }
         let export = tract_libcli::export::GraphPerfInfo::from(model, &annotations);
         *json = CString::new(serde_json::to_string(&export)?)?.into_raw();
@@ -889,7 +899,7 @@ pub struct TractRunnable(Arc<native::TypedRunnableModel<native::TypedModel>>);
 ///
 /// `state` is a newly-created object. It should ultimately be detroyed with `tract_state_destroy`.
 #[no_mangle]
-pub unsafe extern "C" fn tract_runnable_spawn_state(
+pub unsafe extern "C" fn tract_runnable_create_state(
     runnable: *mut TractRunnable,
     state: *mut *mut TractState,
 ) -> TRACT_RESULT {
@@ -1025,7 +1035,13 @@ type NativeState = native::TypedSimpleState<
 >;
 pub struct TractState(NativeState);
 
-/// Run a turn on a model state
+type NativeFrozenState = native::TypedFrozenSimpleState<
+    native::TypedModel,
+    Arc<native::TypedRunnableModel<native::TypedModel>>,
+>;
+pub struct TractFrozenState(NativeFrozenState);
+
+/// Run a turn on a model state.
 ///
 /// `inputs` is a pointer to an pre-existing array of input TractValue. Its length *must* be equal
 /// to the number of inputs of the models. The function does not take ownership of the input
@@ -1046,7 +1062,40 @@ pub unsafe extern "C" fn tract_state_run(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn tract_state_freeze(
+    state: *const TractState,
+    frozen: *mut *mut TractFrozenState,
+) -> TRACT_RESULT {
+    wrap(|| unsafe {
+        check_not_null!(state, frozen);
+        *frozen = std::ptr::null_mut();
+        let f = (*state).0.freeze();
+        *frozen = Box::into_raw(Box::new(TractFrozenState(f)));
+        Ok(())
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tract_fronze_state_unfreeze(
+    frozen: *const TractFrozenState,
+    state: *mut *mut TractState,
+) -> TRACT_RESULT {
+    wrap(|| unsafe {
+        check_not_null!(state, state);
+        *state = std::ptr::null_mut();
+        let s = (*frozen).0.unfreeze();
+        *state = Box::into_raw(Box::new(TractState(s)));
+        Ok(())
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn tract_state_destroy(state: *mut *mut TractState) -> TRACT_RESULT {
+    release!(state)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tract_frozen_state_destroy(state: *mut *mut TractFrozenState) -> TRACT_RESULT {
     release!(state)
 }
 

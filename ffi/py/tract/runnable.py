@@ -3,6 +3,7 @@ from typing import Dict, List, Union # after ctypes so that Union is overriden
 import numpy
 from .value import Value
 from .bindings import check, lib
+from .state import State
 
 class Runnable:
     """
@@ -45,3 +46,12 @@ class Runnable:
         for v in output_ptrs:
             result.append(Value(c_void_p(v)))
         return result
+
+    def state(self) -> State:
+        """
+        Creates a state for running this runnable.
+        """
+        self._valid()
+        state = c_void_p()
+        check(lib.tract_runnable_create_state(self.ptr, byref(state)))
+        return State(self.inputs, self.outputs, state)

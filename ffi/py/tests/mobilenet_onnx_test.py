@@ -167,3 +167,28 @@ def test_profile():
     if "secs_per_iter" in profile["nodes"][0]:
         assert profile["nodes"][0]["secs_per_iter"] >= 0
     assert next(filter(lambda node: "cost" in node and "FMA(F32)" in node["cost"], profile["nodes"]), None) != None
+
+def test_state():
+    model = (
+        tract.nnef()
+        .model_for_path("mobilenet_v2_1.0.onnx.nnef.tgz")
+        .into_optimized()
+        .into_runnable()
+    )
+    state = model.state()
+    result = state.run([grace_hopper_1x3x224x244()])
+    confidences = result[0].to_numpy()
+    assert numpy.argmax(confidences) == 652
+
+def test_frozen_state():
+    model = (
+        tract.nnef()
+        .model_for_path("mobilenet_v2_1.0.onnx.nnef.tgz")
+        .into_optimized()
+        .into_runnable()
+    )
+    state = model.state()
+    state = state.freeze().unfreeze()
+    result = state.run([grace_hopper_1x3x224x244()])
+    confidences = result[0].to_numpy()
+    assert numpy.argmax(confidences) == 652
