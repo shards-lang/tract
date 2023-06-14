@@ -1,6 +1,6 @@
 [package]
 name = "tract-tflite"
-version = "0.1.0"
+version = "0.20.8-pre"
 authors = ["Mathieu Poumeyrol <kali@zoy.org>"]
 license = "MIT/Apache-2.0"
 description = "Tiny, no-nonsense, self contained, TensorFlow and ONNX inference"
@@ -9,4 +9,4 @@ edition = "2021"
 
 [dependencies]
 flatbuffers = {version="23.1.21"}
-tract-hir = { version = "=0.20.7", path = "../hir" }
+tract-hir = { version = "=0.20.8-pre", path = "../hir" }
