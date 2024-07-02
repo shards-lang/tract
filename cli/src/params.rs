@@ -83,6 +83,7 @@ impl Location {
                 target_os = "ios",
                 target_os = "watchos",
                 target_os = "tvos",
+                target_os = "visionos",
                 target_os = "android"
             ))
         {

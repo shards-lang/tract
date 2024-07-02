@@ -22,6 +22,8 @@ fn include_amx() -> bool {
     let os = var("CARGO_CFG_TARGET_OS");
     os == "macos"
         || (env::var("CARGO_FEATURE_APPLE_AMX_IOS").is_ok() && os == "ios" && arch == "aarch64")
+        || (env::var("CARGO_FEATURE_APPLE_AMX_IOS").is_ok() && os == "visionos" && arch == "aarch64")
+        || (env::var("CARGO_FEATURE_APPLE_AMX_VISIONOS").is_ok() && os == "visionos" && arch == "aarch64") // just in case.. as rust and apple defines are a mess
 }
 
 fn jump_table() -> Vec<String> {
@@ -269,7 +271,7 @@ fn preprocess_file(
     }
     .to_owned();
     let long = if msvc { "dd" } else { ".long" };
-    let g = if os == "macos" || os == "ios" { "_" } else { "" };
+    let g = if os == "macos" || os == "ios" || os == "visionos" { "_" } else { "" };
     // note: use .align with bytes instead of p2align since they both use direct bytes.
     let align = if msvc { "align" } else { ".align" };
     let mut globals = liquid::object!({

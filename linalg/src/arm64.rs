@@ -1,5 +1,5 @@
 #![allow(clippy::excessive_precision)]
-#[cfg(any(target_os = "macos", all(target_os = "ios", feature = "apple-amx-ios")))]
+#[cfg(any(target_os = "macos", all(any(target_os = "ios", target_os = "visionos"), feature = "apple-amx-ios")))]
 mod apple_amx;
 mod arm64simd;
 pub mod cortex_a53;
@@ -63,7 +63,7 @@ lazy_static::lazy_static! {
     };
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "visionos"))]
 fn apple_get_syscall(key: &str) -> String {
     use std::ffi::{c_char, c_void, CStr, CString};
     use std::ptr::null_mut;
@@ -110,6 +110,12 @@ fn has_amx() -> bool {
     IPHONE_MODEL_MAJOR.map(|it| it >= 12).unwrap_or(false)
 }
 
+#[cfg(all(target_os = "visionos", feature = "apple-amx-ios"))]
+fn has_amx() -> bool {
+    // vision is M2 based, always has AMX
+    true
+}
+
 #[inline]
 #[cfg(target_os = "ios")]
 pub fn has_fp16() -> bool {
@@ -118,7 +124,14 @@ pub fn has_fp16() -> bool {
 }
 
 #[inline]
-#[cfg(not(target_os = "ios"))]
+#[cfg(target_os = "visionos")]
+pub fn has_fp16() -> bool {
+    // vision is M2 based, always has FP16
+    true
+}
+
+#[inline]
+#[cfg(not(any(target_os = "ios", target_os = "visionos")))]
 pub fn has_fp16() -> bool {
     cfg!(target_os = "macos")
         || cfg!(feature_cpu = "fp16")
@@ -321,7 +334,7 @@ pub fn plug(ops: &mut Ops) {
     } else {
         log::info!("No native fp16 support");
     }
-    #[cfg(any(target_os = "macos", all(target_os = "ios", feature = "apple-amx-ios")))]
+    #[cfg(any(target_os = "macos", all(any(target_os = "ios", target_os = "visionos"), feature = "apple-amx-ios")))]
     {
         if has_amx() {
             log::info!("AMX optimisation activated");
